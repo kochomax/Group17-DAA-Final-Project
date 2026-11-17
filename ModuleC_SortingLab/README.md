@@ -1,11 +1,9 @@
 Algorithm Explorer: Module C (Sorting Lab)
 
-CSC2107 Design and Analysis of Algorithms, Group Project, Advent Semester 2026
-Uganda Christian University
 
 Language:C++ (C++11 standard)
 Group number:17
-Members: _<names and registration numbers>
+
 
 What this module does
 
@@ -76,8 +74,7 @@ Using the program
 1 Enter numbers   2 Generate random   3 Show list
 4 Sort + step through   5 Compare all   6 Complexity help   0 Exit
 ```
-
-- **Enter numbers:** type values separated by commas or spaces, for example `5, 3 8, 1`. Empty or non-numeric input shows an error message.
+Enter numbers: type values separated by commas or spaces, for example `5, 3 8, 1`. Empty or non-numeric input shows an error message.
 - **Generate random:** give `n` (1 to 100000), the smallest value and the largest value.
 - **Sort + step through:** choose an algorithm. Press **Enter** for the next step, **a** for auto-play (you choose the delay in milliseconds), or **q** to skip to the result. Elements being compared, swapped or placed are shown in `[brackets]`.
 - Compare all:runs all six algorithms on the current list and prints one table.
