@@ -4,6 +4,8 @@
 #include "hanoi.h"
 #include "stack.h"
 #include "queue.h"
+#include "linked_list.h"
+#include "bracket_checker.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -76,6 +78,38 @@ bool queueInputActive = false;
 
 char queueMessage[256] =
     "Select a queue type and create a queue.";
+
+    // =========================================
+// LINKED LIST VARIABLES
+// =========================================
+
+SinglyList singlyList;
+DoublyList doublyList;
+
+bool singlyListInitialized = false;
+bool doublyListInitialized = false;
+
+int linkedListType = 0;
+
+char listValueInput[16] = "";
+char listTargetInput[16] = "";
+
+bool listValueActive = false;
+bool listTargetActive = false;
+
+char listMessage[256] =
+    "Select a linked list type and create a list.";
+
+// =========================================
+// BRACKET CHECKER VARIABLES
+// =========================================
+
+char bracketExpression[BRACKET_MAX_LENGTH] = "";
+
+bool bracketInputActive = false;
+bool bracketResultReady = false;
+
+BracketResult bracketResult;
 
 // Tower of Hanoi variables
 int hanoiDisks = 3;
