@@ -1,4 +1,4 @@
-queue.c                                                                                                           #include <stdlib.h>
+ #include <stdlib.h>                                                                                                        #include <stdlib.h>
 #include "queue.h"
 
 int queueInit(Queue *queue, int capacity)
