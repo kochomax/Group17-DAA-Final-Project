@@ -1,4 +1,4 @@
-// test_sorting.cpp - tests the back end WITHOUT any interface
+// test_sorting.cpp - tests the back end without any interface
 #include "sorting.h"
 #include <iostream>
 using namespace algo;
