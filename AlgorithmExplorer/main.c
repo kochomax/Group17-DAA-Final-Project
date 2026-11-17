@@ -265,6 +265,12 @@ void DrawHanoiScreen(void)
 
     DrawText(TextFormat("Number of disks: %d", hanoiDisks),
              100, 140, 20, DARKGRAY);
+             DrawText("Choose disks (1-8):", 100, 180, 18, DARKGRAY);
+             DrawRectangle(300, 175, 100, 35, LIGHTGRAY);
+             DrawRectangleLines(300, 175, 100, 35, DARKBLUE);
+             DrawText(TextFormat("%d", hanoiDisks), 335, 183, 20, DARKBLUE);
+             DrawButton((Rectangle){420, 175, 70, 35}, "-");
+             DrawButton((Rectangle){510, 175, 70, 35}, "+");
 
     DrawText(TextFormat("Moves: %d / %d",
                         hanoiMovesMade, hanoiTotal),
@@ -318,6 +324,9 @@ void DrawHanoiScreen(void)
    DrawButton((Rectangle){350, 530, 120, 45}, "PAUSE");
    DrawButton((Rectangle){550, 530, 120, 45}, "STEP");
    DrawButton((Rectangle){750, 530, 120, 45}, "RESET");
+   DrawButton((Rectangle){150, 480, 120, 40}, "SLOW");
+   DrawButton((Rectangle){350, 480, 120, 40}, "NORMAL");
+   DrawButton((Rectangle){550, 480, 120, 40}, "FAST");
    DrawButton((Rectangle){400, 590, 200, 45}, "BACK");
 }
 // Move one disk between two pegs
@@ -353,25 +362,63 @@ void DrawModuleScreen(const char *title)
     DrawButton((Rectangle){400, 450, 200, 65}, "BACK");
 }
 
+
 int main(void)
 {
     InitWindow(1000, 650, "Algorithm Explorer");
 
+    if (!IsWindowReady())
+    {
+        return 1;
+    }
+
     SetTargetFPS(60);
 
+    // Main application loop
     while (!WindowShouldClose())
     {
+        // ---------------------------------
+        // AUTOMATIC TOWER OF HANOI MOVEMENT
+        // ---------------------------------
+        if (currentScreen == RECURSION_LAB &&
+            recursionMode == TOWER_OF_HANOI &&
+            hanoiRunning && !hanoiPaused)
+        {
+            hanoiMoveTimer += GetFrameTime();
+
+            if (hanoiMoveTimer >= hanoiMoveSpeed)
+            {
+                if (hanoiCurrentMove < hanoiMoveCount)
+                {
+                    HanoiMove move = hanoiMoves[hanoiCurrentMove];
+
+                    MoveHanoiDisk(move.from, move.to);
+
+                    hanoiCurrentMove++;
+                }
+
+                hanoiMoveTimer = 0.0;
+
+                if (hanoiCurrentMove >= hanoiMoveCount)
+                {
+                    hanoiRunning = false;
+                }
+            }
+        }
+
         Vector2 mouse = GetMousePosition();
 
-        // Handle keyboard input
+        // ---------------------------------
+        // HANDLE KEYBOARD INPUT
+        // ---------------------------------
         if (currentScreen == RECURSION_LAB && inputActive)
         {
             int key = GetCharPressed();
 
             while (key > 0)
             {
-                if (key >= '0' && key <= '9'
-                    && strlen(inputText) < 2)
+                if (key >= '0' && key <= '9' &&
+                    strlen(inputText) < 2)
                 {
                     int length = strlen(inputText);
 
@@ -396,9 +443,12 @@ int main(void)
             }
         }
 
-        // Handle mouse clicks
+        // ---------------------------------
+        // HANDLE MOUSE CLICKS
+        // ---------------------------------
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         {
+            // Dashboard buttons
             if (currentScreen == DASHBOARD)
             {
                 Rectangle buttons[4] =
@@ -418,12 +468,100 @@ int main(void)
                     }
                 }
             }
-                        else if (currentScreen == RECURSION_LAB &&
+
+            // Tower of Hanoi controls
+            else if (currentScreen == RECURSION_LAB &&
                      recursionMode == TOWER_OF_HANOI)
             {
+                Rectangle startButton = {150, 530, 120, 45};
+                Rectangle pauseButton = {350, 530, 120, 45};
                 Rectangle stepButton = {550, 530, 120, 45};
                 Rectangle resetButton = {750, 530, 120, 45};
 
+                Rectangle slowButton = {150, 480, 120, 40};
+                Rectangle normalButton = {350, 480, 120, 40};
+                Rectangle fastButton = {550, 480, 120, 40};
+
+                Rectangle minusButton = {420, 175, 70, 35};
+                Rectangle plusButton = {510, 175, 70, 35};
+
+                Rectangle backHanoiButton = {400, 590, 200, 45};
+
+                // Change number of disks
+                if (CheckCollisionPointRec(mouse, minusButton) ||
+                    CheckCollisionPointRec(mouse, plusButton))
+                {
+                    if (CheckCollisionPointRec(mouse, minusButton) &&
+                        hanoiDisks > 1)
+                    {
+                        hanoiDisks--;
+                    }
+                    else if (CheckCollisionPointRec(mouse, plusButton) &&
+                             hanoiDisks < 8)
+                    {
+                        hanoiDisks++;
+                    }
+
+                    hanoiMovesMade = 0;
+                    hanoiCurrentMove = 0;
+                    hanoiMoveCount = 0;
+
+                    hanoiTotal = hanoiTotalMoves(hanoiDisks);
+
+                    generateHanoiMoves(
+                        hanoiDisks, 0, 1, 2,
+                        hanoiMoves, &hanoiMoveCount
+                    );
+
+                    pegCounts[0] = 0;
+                    pegCounts[1] = 0;
+                    pegCounts[2] = 0;
+
+                    for (int i = 0; i < hanoiDisks; i++)
+                    {
+                        pegDisks[0][i] = hanoiDisks - i;
+                        pegCounts[0]++;
+                    }
+
+                    hanoiRunning = false;
+                    hanoiPaused = false;
+                    hanoiMoveTimer = 0.0;
+                }
+
+                // Change movement speed
+                if (CheckCollisionPointRec(mouse, slowButton))
+                {
+                    hanoiMoveSpeed = 1.5f;
+                }
+
+                if (CheckCollisionPointRec(mouse, normalButton))
+                {
+                    hanoiMoveSpeed = 1.0f;
+                }
+
+                if (CheckCollisionPointRec(mouse, fastButton))
+                {
+                    hanoiMoveSpeed = 0.3f;
+                }
+
+                // Start automatic movement
+                if (CheckCollisionPointRec(mouse, startButton))
+                {
+                    if (hanoiCurrentMove < hanoiMoveCount)
+                    {
+                        hanoiRunning = true;
+                        hanoiPaused = false;
+                    }
+                }
+
+                // Pause movement
+                if (CheckCollisionPointRec(mouse, pauseButton))
+                {
+                    hanoiPaused = true;
+                    hanoiRunning = false;
+                }
+
+                // Move one disk
                 if (CheckCollisionPointRec(mouse, stepButton))
                 {
                     if (hanoiCurrentMove < hanoiMoveCount)
@@ -436,6 +574,7 @@ int main(void)
                     }
                 }
 
+                // Reset demonstration
                 if (CheckCollisionPointRec(mouse, resetButton))
                 {
                     hanoiMovesMade = 0;
@@ -453,8 +592,18 @@ int main(void)
 
                     hanoiRunning = false;
                     hanoiPaused = false;
+                    hanoiMoveTimer = 0.0;
+                }
+
+                // Return to recursion menu
+                if (CheckCollisionPointRec(mouse, backHanoiButton))
+                {
+                    currentScreen = RECURSION_LAB;
+                    recursionMode = FIBONACCI;
                 }
             }
+
+            // Other Recursion Lab controls
             else if (currentScreen == RECURSION_LAB)
             {
                 Rectangle inputBox = {150, 300, 250, 50};
@@ -478,49 +627,49 @@ int main(void)
                     recursionMode = FACTORIAL;
                     ResetRecursionInput();
                 }
+
                 if (CheckCollisionPointRec(mouse, hanoiButton))
                 {
-                     recursionMode = TOWER_OF_HANOI;
-                     hanoiDisks = 3;
-                     hanoiMovesMade = 0;
-                     hanoiCurrentMove = 0;
-                     hanoiMoveCount = 0;
-                     hanoiTotal = hanoiTotalMoves(hanoiDisks);
-                     generateHanoiMoves(
-                        hanoiDisks,
-                        0, 1, 2,
-                        hanoiMoves,
-                        &hanoiMoveCount
+                    recursionMode = TOWER_OF_HANOI;
+
+                    hanoiDisks = 3;
+                    hanoiMovesMade = 0;
+                    hanoiCurrentMove = 0;
+                    hanoiMoveCount = 0;
+
+                    hanoiTotal = hanoiTotalMoves(hanoiDisks);
+
+                    generateHanoiMoves(
+                        hanoiDisks, 0, 1, 2,
+                        hanoiMoves, &hanoiMoveCount
                     );
-                    hanoiRunning = false;
-                    hanoiPaused = false;
-                    resultReady = false;
-                    hanoiRunning = false;
-                    hanoiPaused = false;
-                    resultReady = false;
-                    // Reset all three pegs
+
                     pegCounts[0] = 0;
                     pegCounts[1] = 0;
                     pegCounts[2] = 0;
-                    // Place all disks on peg A
+
                     for (int i = 0; i < hanoiDisks; i++)
                     {
                         pegDisks[0][i] = hanoiDisks - i;
                         pegCounts[0]++;
                     }
-                
+
+                    hanoiRunning = false;
+                    hanoiPaused = false;
+                    hanoiMoveTimer = 0.0;
+                    resultReady = false;
                 }
 
                 if (CheckCollisionPointRec(mouse, calculateButton))
                 {
-                   if (recursionMode == FIBONACCI)
-                   {
-                    CalculateFibonacci();
-                }
-                else if (recursionMode == FACTORIAL)
-                {
-                    CalculateFactorial();
-                }
+                    if (recursionMode == FIBONACCI)
+                    {
+                        CalculateFibonacci();
+                    }
+                    else if (recursionMode == FACTORIAL)
+                    {
+                        CalculateFactorial();
+                    }
                 }
 
                 if (CheckCollisionPointRec(mouse, backButton))
@@ -529,6 +678,8 @@ int main(void)
                     ResetRecursionInput();
                 }
             }
+
+            // Back buttons on other module screens
             else
             {
                 Rectangle backButton = {400, 450, 200, 65};
@@ -540,7 +691,11 @@ int main(void)
             }
         }
 
+        // ---------------------------------
+        // DRAW THE CURRENT SCREEN
+        // ---------------------------------
         BeginDrawing();
+
         if (currentScreen == DASHBOARD)
         {
             DrawDashboard();
@@ -566,11 +721,12 @@ int main(void)
         }
         else if (currentScreen == COMPLEXITY_LAB)
         {
-            DrawModuleScreen("TIME COMPLEXITY ANALYSIS");
+            DrawModuleScreen("TIME COMPLEXITY");
         }
+
         EndDrawing();
 
-         }
+    } // End of main while loop
 
     CloseWindow();
 
