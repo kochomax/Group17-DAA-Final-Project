@@ -2,6 +2,7 @@
 #include "raylib.h"
 #include "recursion.h"
 #include "hanoi.h"
+#include "stack.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -33,6 +34,15 @@ bool resultReady = false;
 char resultText[256] = "";
 
 Screen currentScreen = DASHBOARD;
+
+// Stack Lab variables
+Stack userStack;
+bool stackInitialized = false;
+char stackInput[16] = "";
+bool stackInputActive = false;
+char stackMessage[256] = "Create a stack by selecting its capacity.";
+int stackCapacityInput = 5;
+int stackOperationValue = 0;
 RecursionMode recursionMode = FIBONACCI;
 // Tower of Hanoi settings
 int hanoiDisks = 3;
@@ -346,6 +356,66 @@ void MoveHanoiDisk(int from, int to)
     pegCounts[to]++;
 
     hanoiMovesMade++;
+}
+
+// Draw the Stack Lab screen
+void DrawStackLab(void)
+{
+    ClearBackground(RAYWHITE);
+
+    DrawText("STACK LAB", 400, 30, 35, DARKBLUE);
+
+    DrawText("Array-Based Stack", 100, 100, 25, DARKGRAY);
+
+    DrawText("Stack capacity:", 100, 155, 20, DARKGRAY);
+
+    DrawText(TextFormat("%d", stackCapacityInput),
+             280, 155, 20, DARKBLUE);
+
+    DrawButton((Rectangle){330, 145, 50, 40}, "-");
+    DrawButton((Rectangle){390, 145, 50, 40}, "+");
+
+    DrawButton((Rectangle){470, 140, 180, 50}, "CREATE STACK");
+
+    DrawText("Enter value:", 100, 230, 20, DARKGRAY);
+
+    DrawRectangle(100, 265, 200, 45, WHITE);
+    DrawRectangleLines(100, 265, 200, 45, BLUE);
+
+    DrawText(stackInput, 115, 275, 20, BLACK);
+
+    DrawButton((Rectangle){330, 260, 130, 50}, "PUSH");
+    DrawButton((Rectangle){480, 260, 130, 50}, "POP");
+    DrawButton((Rectangle){630, 260, 130, 50}, "PEEK");
+
+    DrawText("STACK CONTENTS", 100, 350, 22, DARKBLUE);
+
+    if (stackInitialized)
+    {
+        DrawText(TextFormat("Size: %d / %d",
+                            stackSize(&userStack),
+                            userStack.capacity),
+                 100, 390, 20, DARKGRAY);
+
+        for (int i = 0; i <= userStack.top; i++)
+        {
+            DrawRectangle(100, 430 - i * 35, 180, 30, SKYBLUE);
+            DrawRectangleLines(100, 430 - i * 35,
+                               180, 30, DARKBLUE);
+
+            DrawText(TextFormat("%d", userStack.items[i]),
+                     180, 435 - i * 35, 18, DARKBLUE);
+        }
+    }
+    else
+    {
+        DrawText("No stack created yet.",
+                 100, 390, 20, GRAY);
+    }
+
+    DrawText(stackMessage, 400, 370, 18, DARKGREEN);
+
+    DrawButton((Rectangle){400, 550, 200, 55}, "BACK");
 }
 
 
