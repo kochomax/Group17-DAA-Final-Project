@@ -397,6 +397,18 @@ void DrawStackLab(void)
                             userStack.capacity),
                  100, 390, 20, DARKGRAY);
 
+                 DrawText(
+    TextFormat("Empty: %s", stackIsEmpty(&userStack) ? "YES" : "NO"),
+    350, 390, 20, DARKGRAY
+);
+
+DrawText(
+    TextFormat("Full: %s", stackIsFull(&userStack) ? "YES" : "NO"),
+    550, 390, 20, DARKGRAY
+);
+
+                 
+
         for (int i = 0; i <= userStack.top; i++)
         {
             DrawRectangle(100, 430 - i * 35, 180, 30, SKYBLUE);
@@ -512,6 +524,37 @@ int main(void)
                 }
             }
         }
+
+        // Handle keyboard input for Stack Lab
+if (currentScreen == DATA_STRUCTURES_LAB && stackInputActive)
+{
+    int key = GetCharPressed();
+
+    while (key > 0)
+    {
+        if (((key >= '0' && key <= '9') ||
+             (key == '-' && strlen(stackInput) == 0)) &&
+            strlen(stackInput) < 14)
+        {
+            int length = strlen(stackInput);
+
+            stackInput[length] = (char)key;
+            stackInput[length + 1] = '\0';
+        }
+
+        key = GetCharPressed();
+    }
+
+    if (IsKeyPressed(KEY_BACKSPACE))
+    {
+        int length = strlen(stackInput);
+
+        if (length > 0)
+        {
+            stackInput[length - 1] = '\0';
+        }
+    }
+}
 
         // ---------------------------------
         // HANDLE MOUSE CLICKS
@@ -749,6 +792,138 @@ int main(void)
                 }
             }
 
+            // ---------------------------------
+// DATA STRUCTURES LAB - STACK CONTROLS
+// ---------------------------------
+else if (currentScreen == DATA_STRUCTURES_LAB)
+{
+    Rectangle minusButton = {330, 145, 50, 40};
+    Rectangle plusButton = {390, 145, 50, 40};
+    Rectangle createButton = {470, 140, 180, 50};
+
+    Rectangle inputBox = {100, 265, 200, 45};
+    Rectangle pushButton = {330, 260, 130, 50};
+    Rectangle popButton = {480, 260, 130, 50};
+    Rectangle peekButton = {630, 260, 130, 50};
+    Rectangle backButton = {400, 550, 200, 55};
+
+    stackInputActive =
+        CheckCollisionPointRec(mouse, inputBox);
+
+    // Change stack capacity
+    if (CheckCollisionPointRec(mouse, minusButton) &&
+        stackCapacityInput > 1)
+    {
+        stackCapacityInput--;
+    }
+
+    if (CheckCollisionPointRec(mouse, plusButton) &&
+        stackCapacityInput < 20)
+    {
+        stackCapacityInput++;
+    }
+
+    // Create stack
+    if (CheckCollisionPointRec(mouse, createButton))
+    {
+        if (stackInitialized)
+        {
+            stackFree(&userStack);
+            stackInitialized = false;
+        }
+
+        if (stackInit(&userStack, stackCapacityInput))
+        {
+            stackInitialized = true;
+            strcpy(stackMessage, "Stack created successfully!");
+        }
+        else
+        {
+            strcpy(stackMessage, "Unable to create stack.");
+        }
+    }
+
+    // Push operation
+    if (CheckCollisionPointRec(mouse, pushButton))
+    {
+        if (!stackInitialized)
+        {
+            strcpy(stackMessage, "Create a stack first.");
+        }
+        else if (stackInput[0] == '\0')
+        {
+            strcpy(stackMessage, "Enter a value first.");
+        }
+        else
+        {
+            char *end;
+            long value = strtol(stackInput, &end, 10);
+
+            if (*end != '\0' ||
+                value < INT_MIN || value > INT_MAX)
+            {
+                strcpy(stackMessage, "Enter a valid integer.");
+            }
+            else if (stackPush(&userStack, (int)value))
+            {
+                strcpy(stackMessage, "Value pushed successfully!");
+                stackInput[0] = '\0';
+            }
+            else
+            {
+                strcpy(stackMessage, "Stack overflow! Stack is full.");
+            }
+        }
+    }
+
+    // Pop operation
+    if (CheckCollisionPointRec(mouse, popButton))
+    {
+        int value;
+
+        if (!stackInitialized)
+        {
+            strcpy(stackMessage, "Create a stack first.");
+        }
+        else if (stackPop(&userStack, &value))
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Popped value: %d", value);
+        }
+        else
+        {
+            strcpy(stackMessage, "Stack underflow! Stack is empty.");
+        }
+    }
+
+    // Peek operation
+    if (CheckCollisionPointRec(mouse, peekButton))
+    {
+        int value;
+
+        if (!stackInitialized)
+        {
+            strcpy(stackMessage, "Create a stack first.");
+        }
+        else if (stackPeek(&userStack, &value))
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Top value: %d", value);
+        }
+        else
+        {
+            strcpy(stackMessage, "Stack is empty.");
+        }
+    }
+
+    // Return to dashboard
+    if (CheckCollisionPointRec(mouse, backButton))
+    {
+        stackInputActive = false;
+        currentScreen = DASHBOARD;
+    }
+}
+
             // Back buttons on other module screens
             else
             {
@@ -781,10 +956,13 @@ int main(void)
                 DrawRecursionLab();
             }
         }
+        
+        
         else if (currentScreen == DATA_STRUCTURES_LAB)
         {
-            DrawModuleScreen("DATA STRUCTURES LAB");
+            DrawStackLab();
         }
+
         else if (currentScreen == SORTING_LAB)
         {
             DrawModuleScreen("SORTING LAB");
