@@ -4,7 +4,7 @@
 // No std::sort, std::vector, std::swap, etc. are used: only plain arrays and
 // our own code. The front end (console, Qt, web...) only needs this header.
 //
-// Counting conventions (state these in the report):
+// Counting conventions
 //   comparisons : every comparison between two ARRAY ELEMENTS
 //   swaps       : every exchange of two array elements
 //   moves       : every single assignment of an element into the array
