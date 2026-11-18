@@ -1,4 +1,3 @@
-
 #include "raylib.h"
 #include "recursion.h"
 #include "hanoi.h"
@@ -13,7 +12,7 @@
 #include <limits.h>
 
 // =========================================
-// APPLICATION SCREENS
+// APPLICATION SCREENS AND MODES
 // =========================================
 
 typedef enum
@@ -25,10 +24,6 @@ typedef enum
     COMPLEXITY_LAB
 } Screen;
 
-// =========================================
-// RECURSION LAB SECTIONS
-// =========================================
-
 typedef enum
 {
     FIBONACCI,
@@ -36,119 +31,98 @@ typedef enum
     TOWER_OF_HANOI
 } RecursionMode;
 
+typedef enum
+{
+    STACK_MODE,
+    QUEUE_MODE,
+    MORE_MODULES_MENU,
+    SINGLY_LIST_MODE,
+    DOUBLY_LIST_MODE,
+    BRACKET_CHECKER_MODE
+} DataStructureMode;
+
 // =========================================
-// GLOBAL VARIABLES
+// GLOBAL APPLICATION STATE
 // =========================================
 
-// Application navigation
-Screen currentScreen = DASHBOARD;
-RecursionMode recursionMode = FIBONACCI;
+static Screen currentScreen = DASHBOARD;
+static RecursionMode recursionMode = FIBONACCI;
+static DataStructureMode dataStructureMode = STACK_MODE;
 
-// Recursion input
-char inputText[16] = "";
-int inputValue = 0;
-bool inputActive = false;
-bool resultReady = false;
-char resultText[256] = "";
+// Recursion input and results
+static char inputText[16] = "";
+static bool inputActive = false;
+static bool resultReady = false;
+static char resultText[256] = "";
 
-// Stack variables
-Stack userStack;
-bool stackInitialized = false;
-
-int stackCapacityInput = 5;
-char stackInput[16] = "";
-bool stackInputActive = false;
-
-char stackMessage[256] =
+// Stack
+static Stack userStack;
+static bool stackInitialized = false;
+static int stackCapacityInput = 5;
+static char stackInput[16] = "";
+static bool stackInputActive = false;
+static char stackMessage[256] =
     "Create a stack by selecting its capacity.";
 
-// Queue variables
-Queue circularQueue;
-LinearQueue linearQueue;
-
-bool queueInitialized = false;
-bool linearQueueInitialized = false;
-
-int queueCapacityInput = 5;
-int queueType = 0;
-int dataStructureMode = 0;
-
-char queueInput[16] = "";
-bool queueInputActive = false;
-
-char queueMessage[256] =
+// Queues
+static Queue circularQueue;
+static LinearQueue linearQueue;
+static bool queueInitialized = false;
+static bool linearQueueInitialized = false;
+static int queueCapacityInput = 5;
+static int queueType = 0;
+static char queueInput[16] = "";
+static bool queueInputActive = false;
+static char queueMessage[256] =
     "Select a queue type and create a queue.";
 
-    // =========================================
-// LINKED LIST VARIABLES
-// =========================================
+// Linked lists
+static SinglyList singlyList;
+static DoublyList doublyList;
+static char listValueInput[16] = "";
+static char listTargetInput[16] = "";
+static bool listValueActive = false;
+static bool listTargetActive = false;
+static char listMessage[256] =
+    "Enter values to perform linked-list operations.";
 
-SinglyList singlyList;
-DoublyList doublyList;
+// Bracket checker
+static char bracketExpression[BRACKET_MAX_LENGTH] = "";
+static bool bracketInputActive = false;
+static bool bracketResultReady = false;
+static int bracketScroll = 0;
+static BracketResult bracketResult;
 
-bool singlyListInitialized = false;
-bool doublyListInitialized = false;
-
-int linkedListType = 0;
-
-char listValueInput[16] = "";
-char listTargetInput[16] = "";
-
-bool listValueActive = false;
-bool listTargetActive = false;
-
-char listMessage[256] =
-    "Select a linked list type and create a list.";
-
-// =========================================
-// BRACKET CHECKER VARIABLES
-// =========================================
-
-char bracketExpression[BRACKET_MAX_LENGTH] = "";
-
-bool bracketInputActive = false;
-bool bracketResultReady = false;
-
-BracketResult bracketResult;
-
-// Tower of Hanoi variables
-int hanoiDisks = 3;
-int hanoiMovesMade = 0;
-int hanoiTotal = 0;
-
-bool hanoiRunning = false;
-bool hanoiPaused = false;
-
-double hanoiMoveTimer = 0.0;
-float hanoiMoveSpeed = 1.0f;
-
-HanoiMove hanoiMoves[MAX_HANOI_MOVES];
-
-int hanoiMoveCount = 0;
-int hanoiCurrentMove = 0;
-
-// Store disks on the three pegs
-int pegDisks[3][8];
-int pegCounts[3] = {0, 0, 0};
+// Tower of Hanoi
+static int hanoiDisks = 3;
+static int hanoiMovesMade = 0;
+static int hanoiTotal = 0;
+static bool hanoiRunning = false;
+static bool hanoiPaused = false;
+static double hanoiMoveTimer = 0.0;
+static float hanoiMoveSpeed = 1.0f;
+static HanoiMove hanoiMoves[MAX_HANOI_MOVES];
+static int hanoiMoveCount = 0;
+static int hanoiCurrentMove = 0;
+static int pegDisks[3][8];
+static int pegCounts[3] = {0, 0, 0};
 
 // =========================================
-// DRAW BUTTON
+// SHARED HELPERS
 // =========================================
 
-void DrawButton(Rectangle button, const char *text)
+static void DrawButton(Rectangle button, const char *label)
 {
     Vector2 mouse = GetMousePosition();
-
     bool hovering = CheckCollisionPointRec(mouse, button);
+    Color fill = hovering ? BLUE : DARKBLUE;
 
-    Color buttonColor = hovering ? BLUE : DARKBLUE;
+    DrawRectangleRounded(button, 0.2f, 10, fill);
 
-    DrawRectangleRounded(button, 0.2f, 10, buttonColor);
-
-    int textWidth = MeasureText(text, 20);
+    int textWidth = MeasureText(label, 20);
 
     DrawText(
-        text,
+        label,
         (int)(button.x + (button.width - textWidth) / 2),
         (int)(button.y + (button.height - 20) / 2),
         20,
@@ -156,11 +130,74 @@ void DrawButton(Rectangle button, const char *text)
     );
 }
 
+static int ParseInteger(const char *text, int *value)
+{
+    char *end = NULL;
+    long parsed;
+
+    if (text == NULL || text[0] == '\0' || value == NULL)
+        return 0;
+
+    parsed = strtol(text, &end, 10);
+
+    if (end == text || *end != '\0' ||
+        parsed < INT_MIN || parsed > INT_MAX)
+        return 0;
+
+    *value = (int)parsed;
+    return 1;
+}
+
+static void HandleIntegerTyping(char *buffer, size_t capacity)
+{
+    int key = GetCharPressed();
+
+    while (key > 0)
+    {
+        size_t length = strlen(buffer);
+
+        if (((key >= '0' && key <= '9') ||
+             (key == '-' && length == 0)) &&
+            length + 1 < capacity)
+        {
+            buffer[length] = (char)key;
+            buffer[length + 1] = '\0';
+        }
+
+        key = GetCharPressed();
+    }
+
+    if (IsKeyPressed(KEY_BACKSPACE))
+    {
+        size_t length = strlen(buffer);
+
+        if (length > 0)
+            buffer[length - 1] = '\0';
+    }
+}
+
+static void ResetRecursionInput(void)
+{
+    inputText[0] = '\0';
+    resultReady = false;
+    resultText[0] = '\0';
+    inputActive = false;
+}
+
+static void ResetDataStructureInputFocus(void)
+{
+    stackInputActive = false;
+    queueInputActive = false;
+    listValueActive = false;
+    listTargetActive = false;
+    bracketInputActive = false;
+}
+
 // =========================================
 // DASHBOARD
 // =========================================
 
-void DrawDashboard(void)
+static void DrawDashboard(void)
 {
     ClearBackground(RAYWHITE);
 
@@ -180,23 +217,10 @@ void DrawDashboard(void)
 }
 
 // =========================================
-// RESET RECURSION INPUT
+// RECURSION LAB
 // =========================================
 
-void ResetRecursionInput(void)
-{
-    inputText[0] = '\0';
-    inputValue = 0;
-    resultReady = false;
-    resultText[0] = '\0';
-    inputActive = false;
-}
-
-// =========================================
-// RECURSION INPUT FIELD
-// =========================================
-
-void DrawInputField(void)
+static void DrawInputField(void)
 {
     DrawText("Enter a number:", 150, 260, 22, DARKGRAY);
 
@@ -211,18 +235,28 @@ void DrawInputField(void)
     );
 }
 
-// =========================================
-// FIBONACCI CALCULATION
-// =========================================
-
-void CalculateFibonacci(void)
+static void CalculateFibonacci(void)
 {
-    int n = atoi(inputText);
+    int n;
+    long long naiveCalls = 0;
+    long long memoCalls = 0;
+    long long dpIterations = 0;
+    long long memo[31];
 
-    if (inputText[0] == '\0' || n < 0 || n > 30)
+    double start;
+    double naiveTime;
+    double memoTime;
+    double dpTime;
+
+    long long naiveResult;
+    long long memoResult;
+    long long dpResult;
+
+    if (!ParseInteger(inputText, &n) || n < 0 || n > 30)
     {
-        strcpy(
+        snprintf(
             resultText,
+            sizeof(resultText),
             "Enter a valid Fibonacci number from 0 to 30."
         );
 
@@ -230,84 +264,71 @@ void CalculateFibonacci(void)
         return;
     }
 
-    inputValue = n;
-
-    long long naiveCalls = 0;
-    long long memoCalls = 0;
-    long long dpIterations = 0;
-
-    long long memo[31];
-
     for (int i = 0; i <= 30; i++)
-    {
         memo[i] = -1;
-    }
-
-    double start = GetTime();
-
-    long long naiveResult =
-        fibonacciNaive(n, &naiveCalls);
-
-    double naiveTime =
-        (GetTime() - start) * 1000000.0;
 
     start = GetTime();
-
-    long long memoResult =
-        fibonacciMemo(n, memo, &memoCalls);
-
-    double memoTime =
-        (GetTime() - start) * 1000000.0;
+    naiveResult = fibonacciNaive(n, &naiveCalls);
+    naiveTime = (GetTime() - start) * 1000000.0;
 
     start = GetTime();
+    memoResult = fibonacciMemo(n, memo, &memoCalls);
+    memoTime = (GetTime() - start) * 1000000.0;
 
-    long long dpResult =
-        fibonacciDP(n, &dpIterations);
+    start = GetTime();
+    dpResult = fibonacciDP(n, &dpIterations);
+    dpTime = (GetTime() - start) * 1000000.0;
 
-    double dpTime =
-        (GetTime() - start) * 1000000.0;
-
-    snprintf(
-        resultText,
-        sizeof(resultText),
-        "Fibonacci(%d) = %lld\n"
-        "Naive: %lld calls | %.2f us\n"
-        "Memoized: %lld calls | %.2f us\n"
-        "Bottom-up DP: %lld iterations | %.2f us",
-        n,
-        naiveResult,
-        naiveCalls,
-        naiveTime,
-        memoCalls,
-        memoTime,
-        dpIterations,
-        dpTime
-    );
-
-    if (naiveResult != memoResult ||
-        memoResult != dpResult)
+    if (naiveResult != memoResult || memoResult != dpResult)
     {
-        strcpy(
+        snprintf(
             resultText,
+            sizeof(resultText),
             "Calculation verification failed."
+        );
+    }
+    else
+    {
+        snprintf(
+            resultText,
+            sizeof(resultText),
+            "Fibonacci(%d) = %lld\n"
+            "Naive: %lld calls | %.2f us\n"
+            "Memoized: %lld calls | %.2f us\n"
+            "Bottom-up DP: %lld iterations | %.2f us",
+            n,
+            naiveResult,
+            naiveCalls,
+            naiveTime,
+            memoCalls,
+            memoTime,
+            dpIterations,
+            dpTime
         );
     }
 
     resultReady = true;
 }
 
-// =========================================
-// FACTORIAL CALCULATION
-// =========================================
-
-void CalculateFactorial(void)
+static void CalculateFactorial(void)
 {
-    int n = atoi(inputText);
+    int n;
 
-    if (inputText[0] == '\0' || n < 0 || n > 20)
+    long long recursiveCalls = 0;
+    long long iterativeIterations = 0;
+
+    long long recursiveResult;
+    long long iterativeResult;
+
+    double start;
+    double recursiveTime;
+    double iterativeTime;
+
+    if (!ParseInteger(inputText, &n) || n < 0 || n > 20)
     {
-        strcpy(
+        snprintf(
             resultText,
+            sizeof(resultText),
             "Enter a valid factorial number from 0 to 20."
         );
 
@@ -315,87 +336,96 @@ void CalculateFactorial(void)
         return;
     }
 
-    inputValue = n;
-
-    long long recursiveCalls = 0;
-    long long iterativeIterations = 0;
-
-    double start = GetTime();
-
-    long long recursiveResult =
-        factorialRecursive(n, &recursiveCalls);
-
-    double recursiveTime =
-        (GetTime() - start) * 1000000.0;
+    start = GetTime();
+    recursiveResult = factorialRecursive(n, &recursiveCalls);
+    recursiveTime = (GetTime() - start) * 1000000.0;
 
     start = GetTime();
-
-    long long iterativeResult =
-        factorialIterative(n, &iterativeIterations);
-
-    double iterativeTime =
-        (GetTime() - start) * 1000000.0;
-
-    snprintf(
-        resultText,
-        sizeof(resultText),
-        "%d! = %lld\n"
-        "Recursive: %lld calls | %.2f us\n"
-        "Iterative: %lld iterations | %.2f us",
-        n,
-        recursiveResult,
-        recursiveCalls,
-        recursiveTime,
-        iterativeIterations,
-        iterativeTime
-    );
+    iterativeResult = factorialIterative(n, &iterativeIterations);
+    iterativeTime = (GetTime() - start) * 1000000.0;
 
     if (recursiveResult != iterativeResult)
     {
-        strcpy(
+        snprintf(
             resultText,
+            sizeof(resultText),
             "Calculation verification failed."
+        );
+    }
+    else
+    {
+        snprintf(
+            resultText,
+            sizeof(resultText),
+            "%d! = %lld\n"
+            "Recursive: %lld calls | %.2f us\n"
+            "Iterative: %lld iterations | %.2f us",
+            n,
+            recursiveResult,
+            recursiveCalls,
+            recursiveTime,
+            iterativeIterations,
+            iterativeTime
         );
     }
 
     resultReady = true;
 }
 
-// =========================================
-// RECURSION LAB SCREEN
-// =========================================
-
-void DrawRecursionLab(void)
+static void InitialiseHanoi(void)
 {
-    ClearBackground(RAYWHITE);
+    hanoiMovesMade = 0;
+    hanoiCurrentMove = 0;
+    hanoiMoveCount = 0;
 
-    DrawText("RECURSION LAB", 350, 35, 35, DARKBLUE);
+    hanoiTotal = hanoiTotalMoves(hanoiDisks);
 
-    DrawText("Choose an algorithm:", 150, 115, 22, DARKGRAY);
+    generateHanoiMoves(
+        hanoiDisks,
+        0,
+        1,
+        2,
+        hanoiMoves,
+        &hanoiMoveCount
+    );
 
-    DrawButton((Rectangle){150, 155, 220, 65}, "Fibonacci");
-    DrawButton((Rectangle){390, 155, 220, 65}, "Factorial");
-    DrawButton((Rectangle){630, 155, 220, 65}, "Tower of Hanoi");
+    pegCounts[0] = 0;
+    pegCounts[1] = 0;
+    pegCounts[2] = 0;
 
-    DrawInputField();
-
-    DrawButton((Rectangle){150, 420, 250, 65}, "Calculate");
-
-    if (resultReady)
+    for (int i = 0; i < hanoiDisks; i++)
     {
-        DrawText("RESULTS", 500, 270, 22, DARKBLUE);
-
-        DrawText(resultText, 500, 310, 17, DARKGRAY);
+        pegDisks[0][i] = hanoiDisks - i;
+        pegCounts[0]++;
     }
 
-    DrawButton((Rectangle){150, 530, 180, 60}, "BACK");
+    hanoiRunning = false;
+    hanoiPaused = false;
+    hanoiMoveTimer = 0.0;
 }
 
-// =========================================
-// TOWER OF HANOI SCREEN
-// =========================================
+static void MoveHanoiDisk(int from, int to)
+{
+    int disk;
 
-void DrawHanoiScreen(void)
+    if (from < 0 || from > 2 || to < 0 || to > 2)
+        return;
+
+    if (pegCounts[from] <= 0 || pegCounts[to] >= 8)
+        return;
+
+    disk = pegDisks[from][pegCounts[from] - 1];
+
+    pegCounts[from]--;
+
+    pegDisks[to][pegCounts[to]] = disk;
+
+    pegCounts[to]++;
+
+    hanoiMovesMade++;
+}
+
+static void DrawHanoiScreen(void)
 {
     ClearBackground(RAYWHITE);
 
@@ -429,7 +459,6 @@ void DrawHanoiScreen(void)
         700, 140, 20, DARKGRAY
     );
 
-    // Draw pegs
     DrawLineEx(
         (Vector2){250, 450},
         (Vector2){250, 230},
@@ -448,14 +477,12 @@ void DrawHanoiScreen(void)
         8, DARKGRAY
     );
 
-    // Draw base
     DrawLineEx(
         (Vector2){120, 450},
         (Vector2){880, 450},
         8, DARKGRAY
     );
 
-    // Draw disks
     for (int peg = 0; peg < 3; peg++)
     {
         for (int i = 0; i < pegCounts[peg]; i++)
@@ -463,24 +490,18 @@ void DrawHanoiScreen(void)
             int diskSize = pegDisks[peg][i];
 
             float diskWidth = 50 + diskSize * 35;
-            float diskHeight = 20;
-
             float x = 250 + peg * 250 - diskWidth / 2;
-            float y = 450 - (i + 1) * diskHeight;
+            float y = 450 - (i + 1) * 20;
 
             DrawRectangle(
-                (int)x,
-                (int)y,
-                (int)diskWidth,
-                (int)diskHeight,
+                (int)x, (int)y,
+                (int)diskWidth, 20,
                 BLUE
             );
 
             DrawRectangleLines(
-                (int)x,
-                (int)y,
-                (int)diskWidth,
-                (int)diskHeight,
+                (int)x, (int)y,
+                (int)diskWidth, 20,
                 DARKBLUE
             );
         }
@@ -502,46 +523,45 @@ void DrawHanoiScreen(void)
     DrawButton((Rectangle){400, 590, 200, 45}, "BACK");
 }
 
-// =========================================
-// MOVE HANOI DISK
-// =========================================
-
-void MoveHanoiDisk(int from, int to)
+static void DrawRecursionLab(void)
 {
-    if (from < 0 || from > 2 || to < 0 || to > 2)
-        return;
+    ClearBackground(RAYWHITE);
 
-    if (pegCounts[from] <= 0 || pegCounts[to] >= 8)
-        return;
+    DrawText("RECURSION LAB", 350, 35, 35, DARKBLUE);
 
-    int disk = pegDisks[from][pegCounts[from] - 1];
+    DrawText("Choose an algorithm:", 150, 115, 22, DARKGRAY);
 
-    pegCounts[from]--;
+    DrawButton((Rectangle){150, 155, 220, 65}, "Fibonacci");
+    DrawButton((Rectangle){390, 155, 220, 65}, "Factorial");
+    DrawButton((Rectangle){630, 155, 220, 65}, "Tower of Hanoi");
 
-    pegDisks[to][pegCounts[to]] = disk;
+    DrawInputField();
 
-    pegCounts[to]++;
+    DrawButton((Rectangle){150, 420, 250, 65}, "Calculate");
 
-    hanoiMovesMade++;
+    if (resultReady)
+    {
+        DrawText("RESULTS", 500, 270, 22, DARKBLUE);
+        DrawText(resultText, 500, 310, 17, DARKGRAY);
+    }
+
+    DrawButton((Rectangle){150, 530, 180, 60}, "BACK");
 }
 
 // =========================================
-// DRAW STACK LAB
+// STACK LAB
 // =========================================
 
-void DrawStackLab(void)
+static void DrawStackLab(void)
 {
     ClearBackground(RAYWHITE);
 
     DrawText("STACK LAB", 400, 30, 35, DARKBLUE);
 
-    DrawButton(
-        (Rectangle){700, 30, 180, 45},
-        "QUEUE LAB"
-    );
+    DrawButton((Rectangle){700, 30, 180, 45}, "QUEUE LAB");
+    DrawButton((Rectangle){490, 30, 180, 45}, "MORE MODULES");
 
     DrawText("Array-Based Stack", 100, 100, 25, DARKGRAY);
-
     DrawText("Stack capacity:", 100, 155, 20, DARKGRAY);
 
     DrawText(
@@ -552,10 +572,7 @@ void DrawStackLab(void)
     DrawButton((Rectangle){330, 145, 50, 40}, "-");
     DrawButton((Rectangle){390, 145, 50, 40}, "+");
 
-    DrawButton(
-        (Rectangle){470, 140, 180, 50},
-        "CREATE STACK"
-    );
+    DrawButton((Rectangle){470, 140, 180, 50}, "CREATE STACK");
 
     DrawText("Enter value:", 100, 230, 20, DARKGRAY);
 
@@ -599,37 +616,20 @@ void DrawStackLab(void)
 
         for (int i = 0; i <= userStack.top; i++)
         {
-            DrawRectangle(
-                100,
-                430 - i * 35,
-                180,
-                30,
-                SKYBLUE
-            );
+            int y = 430 - i * 35;
 
-            DrawRectangleLines(
-                100,
-                430 - i * 35,
-                180,
-                30,
-                DARKBLUE
-            );
+            DrawRectangle(100, y, 180, 30, SKYBLUE);
+            DrawRectangleLines(100, y, 180, 30, DARKBLUE);
 
             DrawText(
                 TextFormat("%d", userStack.items[i]),
-                180,
-                435 - i * 35,
-                18,
-                DARKBLUE
+                180, y + 5, 18, DARKBLUE
             );
         }
     }
     else
     {
-        DrawText(
-            "No stack created yet.",
-            100, 390, 20, GRAY
-        );
+        DrawText("No stack created yet.", 100, 390, 20, GRAY);
     }
 
     DrawText(stackMessage, 400, 370, 18, DARKGREEN);
@@ -637,32 +637,167 @@ void DrawStackLab(void)
     DrawButton((Rectangle){400, 550, 200, 55}, "BACK");
 }
 
+static void HandleStackClicks(Vector2 mouse)
+{
+    Rectangle queueButton = {700, 30, 180, 45};
+    Rectangle moreButton = {490, 30, 180, 45};
+    Rectangle minusButton = {330, 145, 50, 40};
+    Rectangle plusButton = {390, 145, 50, 40};
+    Rectangle createButton = {470, 140, 180, 50};
+    Rectangle inputBox = {100, 265, 200, 45};
+    Rectangle pushButton = {330, 260, 130, 50};
+    Rectangle popButton = {480, 260, 130, 50};
+    Rectangle peekButton = {630, 260, 130, 50};
+    Rectangle backButton = {400, 550, 200, 55};
+
+    if (CheckCollisionPointRec(mouse, queueButton))
+    {
+        dataStructureMode = QUEUE_MODE;
+        stackInputActive = false;
+        return;
+    }
+
+    if (CheckCollisionPointRec(mouse, moreButton))
+    {
+        dataStructureMode = MORE_MODULES_MENU;
+        stackInputActive = false;
+        return;
+    }
+
+    stackInputActive = CheckCollisionPointRec(mouse, inputBox);
+
+    if (CheckCollisionPointRec(mouse, minusButton) &&
+        stackCapacityInput > 1)
+    {
+        stackCapacityInput--;
+    }
+
+    if (CheckCollisionPointRec(mouse, plusButton) &&
+        stackCapacityInput < 20)
+    {
+        stackCapacityInput++;
+    }
+
+    if (CheckCollisionPointRec(mouse, createButton))
+    {
+        if (stackInitialized)
+        {
+            stackFree(&userStack);
+            stackInitialized = false;
+        }
+
+        if (stackInit(&userStack, stackCapacityInput))
+        {
+            stackInitialized = true;
+
+            snprintf(
+                stackMessage,
+                sizeof(stackMessage),
+                "Stack created successfully!"
+            );
+        }
+        else
+        {
+            snprintf(
+                stackMessage,
+                sizeof(stackMessage),
+                "Unable to create stack."
+            );
+        }
+    }
+
+    if (CheckCollisionPointRec(mouse, pushButton))
+    {
+        int value;
+
+        if (!stackInitialized)
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Create a stack first.");
+        }
+        else if (!ParseInteger(stackInput, &value))
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Enter a valid integer.");
+        }
+        else if (stackPush(&userStack, value))
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Value pushed successfully!");
+            stackInput[0] = '\0';
+        }
+        else
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Stack overflow! Stack is full.");
+        }
+    }
+
+    if (CheckCollisionPointRec(mouse, popButton))
+    {
+        int value;
+
+        if (!stackInitialized)
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Create a stack first.");
+        }
+        else if (stackPop(&userStack, &value))
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Popped value: %d", value);
+        }
+        else
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Stack underflow! Stack is empty.");
+        }
+    }
+
+    if (CheckCollisionPointRec(mouse, peekButton))
+    {
+        int value;
+
+        if (!stackInitialized)
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Create a stack first.");
+        }
+        else if (stackPeek(&userStack, &value))
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Top value: %d", value);
+        }
+        else
+        {
+            snprintf(stackMessage, sizeof(stackMessage),
+                     "Stack is empty.");
+        }
+    }
+
+    if (CheckCollisionPointRec(mouse, backButton))
+    {
+        currentScreen = DASHBOARD;
+        stackInputActive = false;
+    }
+}
+
 // =========================================
-// DRAW QUEUE LAB
+// QUEUE LAB
 // =========================================
 
-void DrawQueueLab(void)
+static void DrawQueueLab(void)
 {
     ClearBackground(RAYWHITE);
 
     DrawText("QUEUE LAB", 400, 30, 35, DARKBLUE);
 
-    DrawButton(
-        (Rectangle){700, 30, 180, 45},
-        "BACK TO STACK"
-    );
+    DrawButton((Rectangle){700, 30, 180, 45}, "BACK TO STACK");
 
     DrawText("Select Queue Type:", 100, 110, 20, DARKGRAY);
 
-    DrawButton(
-        (Rectangle){100, 150, 200, 50},
-        "LINEAR QUEUE"
-    );
-
-    DrawButton(
-        (Rectangle){330, 150, 200, 50},
-        "CIRCULAR QUEUE"
-    );
+    DrawButton((Rectangle){100, 150, 200, 50}, "LINEAR QUEUE");
+    DrawButton((Rectangle){330, 150, 200, 50}, "CIRCULAR QUEUE");
 
     DrawText(
         TextFormat("Capacity: %d", queueCapacityInput),
@@ -671,11 +806,7 @@ void DrawQueueLab(void)
 
     DrawButton((Rectangle){330, 215, 50, 40}, "-");
     DrawButton((Rectangle){390, 215, 50, 40}, "+");
-
-    DrawButton(
-        (Rectangle){470, 210, 180, 50},
-        "CREATE QUEUE"
-    );
+    DrawButton((Rectangle){470, 210, 180, 50}, "CREATE QUEUE");
 
     DrawText("Enter value:", 100, 290, 20, DARKGRAY);
 
@@ -690,7 +821,6 @@ void DrawQueueLab(void)
 
     DrawText("QUEUE CONTENTS", 100, 400, 22, DARKBLUE);
 
-    // Linear queue display
     if (queueType == 1 && linearQueueInitialized)
     {
         DrawText(
@@ -702,37 +832,30 @@ void DrawQueueLab(void)
             100, 440, 20, DARKGRAY
         );
 
+        DrawText(
+            TextFormat(
+                "Front index: %d   Rear index: %d",
+                linearQueue.size == 0 ? -1 : linearQueue.front,
+                linearQueue.size == 0 ? -1 : linearQueue.rear
+            ),
+            400, 440, 18, DARKGRAY
+        );
+
         for (int i = linearQueue.front;
-             i <= linearQueue.rear;
+             i <= linearQueue.rear && linearQueue.size > 0;
              i++)
         {
-            DrawRectangle(
-                100 + (i - linearQueue.front) * 75,
-                490,
-                65,
-                40,
-                SKYBLUE
-            );
+            int x = 100 + (i - linearQueue.front) * 75;
 
-            DrawRectangleLines(
-                100 + (i - linearQueue.front) * 75,
-                490,
-                65,
-                40,
-                DARKBLUE
-            );
+            DrawRectangle(x, 490, 65, 40, SKYBLUE);
+            DrawRectangleLines(x, 490, 65, 40, DARKBLUE);
 
             DrawText(
                 TextFormat("%d", linearQueue.items[i]),
-                120 + (i - linearQueue.front) * 75,
-                500,
-                18,
-                DARKBLUE
+                x + 20, 500, 18, DARKBLUE
             );
         }
     }
-
-    // Circular queue display
     else if (queueType == 2 && queueInitialized)
     {
         DrawText(
@@ -744,64 +867,864 @@ void DrawQueueLab(void)
             100, 440, 20, DARKGRAY
         );
 
+        DrawText(
+            TextFormat(
+                "Front index: %d   Rear index: %d",
+                circularQueue.size == 0 ? -1 : circularQueue.front,
+                circularQueue.size == 0 ? -1 : circularQueue.rear
+            ),
+            400, 440, 18, DARKGRAY
+        );
+
         for (int i = 0; i < circularQueue.size; i++)
         {
             int index =
-                (circularQueue.front + i) %
-                circularQueue.capacity;
+                (circularQueue.front + i) % circularQueue.capacity;
 
-            DrawRectangle(
-                100 + i * 75,
-                490,
-                65,
-                40,
-                SKYBLUE
-            );
+            int x = 100 + i * 75;
 
-            DrawRectangleLines(
-                100 + i * 75,
-                490,
-                65,
-                40,
-                DARKBLUE
-            );
+            DrawRectangle(x, 490, 65, 40, SKYBLUE);
+            DrawRectangleLines(x, 490, 65, 40, DARKBLUE);
 
             DrawText(
                 TextFormat("%d", circularQueue.items[index]),
-                120 + i * 75,
-                500,
-                18,
-                DARKBLUE
+                x + 20, 500, 18, DARKBLUE
             );
         }
-
-        DrawText(
-            TextFormat(
-                "Front: %d  Rear: %d",
-                circularQueue.front,
-                circularQueue.rear
-            ),
-            100, 550, 20, DARKGRAY
-        );
     }
     else
     {
-        DrawText(
-            "No queue created yet.",
-            100, 440, 20, GRAY
-        );
+        DrawText("No queue created yet.", 100, 440, 20, GRAY);
     }
 
-    DrawText(queueMessage, 400, 400, 18, DARKGREEN);
+    DrawText(queueMessage, 100, 565, 18, DARKGREEN);
 
-    DrawButton((Rectangle){400, 620, 200, 50}, "BACK");
+    DrawText(
+        "Linear queues can become false-full; circular queues reuse freed slots.",
+        100, 595, 15, GRAY
+    );
+}
+
+static void HandleQueueClicks(Vector2 mouse)
+{
+    Rectangle backButton = {700, 30, 180, 45};
+    Rectangle linearButton = {100, 150, 200, 50};
+    Rectangle circularButton = {330, 150, 200, 50};
+    Rectangle minusButton = {330, 215, 50, 40};
+    Rectangle plusButton = {390, 215, 50, 40};
+    Rectangle createButton = {470, 210, 180, 50};
+    Rectangle inputBox = {100, 320, 200, 45};
+    Rectangle enqueueButton = {330, 315, 150, 50};
+    Rectangle dequeueButton = {500, 315, 150, 50};
+    Rectangle frontButton = {670, 315, 130, 50};
+
+    if (CheckCollisionPointRec(mouse, backButton))
+    {
+        dataStructureMode = STACK_MODE;
+        queueInputActive = false;
+        return;
+    }
+
+    queueInputActive = CheckCollisionPointRec(mouse, inputBox);
+
+    if (CheckCollisionPointRec(mouse, linearButton))
+        queueType = 1;
+    else if (CheckCollisionPointRec(mouse, circularButton))
+        queueType = 2;
+
+    if (CheckCollisionPointRec(mouse, minusButton) &&
+        queueCapacityInput > 1)
+    {
+        queueCapacityInput--;
+    }
+
+    if (CheckCollisionPointRec(mouse, plusButton) &&
+        queueCapacityInput < 8)
+    {
+        queueCapacityInput++;
+    }
+
+    if (CheckCollisionPointRec(mouse, createButton))
+    {
+        if (queueInitialized)
+        {
+            queueFree(&circularQueue);
+            queueInitialized = false;
+        }
+
+        if (linearQueueInitialized)
+        {
+            linearQueueFree(&linearQueue);
+            linearQueueInitialized = false;
+        }
+
+        if (queueType == 1)
+        {
+            if (linearQueueInit(&linearQueue, queueCapacityInput))
+            {
+                linearQueueInitialized = true;
+
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Linear queue created!"
+                );
+            }
+            else
+            {
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Queue creation failed."
+                );
+            }
+        }
+        else if (queueType == 2)
+        {
+            if (queueInit(&circularQueue, queueCapacityInput))
+            {
+                queueInitialized = true;
+
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Circular queue created!"
+                );
+            }
+            else
+            {
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Queue creation failed."
+                );
+            }
+        }
+        else
+        {
+            snprintf(
+                queueMessage,
+                sizeof(queueMessage),
+                "Select a queue type first."
+            );
+        }
+
+        queueInput[0] = '\0';
+    }
+
+    if (CheckCollisionPointRec(mouse, enqueueButton))
+    {
+        int value;
+
+        if (!ParseInteger(queueInput, &value))
+        {
+            snprintf(
+                queueMessage,
+                sizeof(queueMessage),
+                "Enter a valid integer."
+            );
+        }
+        else if (queueType == 1 && linearQueueInitialized)
+        {
+            if (linearEnqueue(&linearQueue, value))
+            {
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Value enqueued!"
+                );
+
+                queueInput[0] = '\0';
+            }
+            else
+            {
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Linear queue is full!"
+                );
+            }
+        }
+        else if (queueType == 2 && queueInitialized)
+        {
+            if (enqueue(&circularQueue, value))
+            {
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Value enqueued!"
+                );
+
+                queueInput[0] = '\0';
+            }
+            else
+            {
+                snprintf(
+                    queueMessage,
+                    sizeof(queueMessage),
+                    "Circular queue is full!"
+                );
+            }
+        }
+        else
+        {
+            snprintf(
+                queueMessage,
+                sizeof(queueMessage),
+                "Create a queue first."
+            );
+        }
+    }
+
+    if (CheckCollisionPointRec(mouse, dequeueButton))
+    {
+        int value;
+        int success = 0;
+
+        if (queueType == 1 && linearQueueInitialized)
+            success = linearDequeue(&linearQueue, &value);
+        else if (queueType == 2 && queueInitialized)
+            success = dequeue(&circularQueue, &value);
+
+        if (success)
+        {
+            snprintf(
+                queueMessage,
+                sizeof(queueMessage),
+                "Dequeued: %d",
+                value
+            );
+        }
+        else
+        {
+            snprintf(
+                queueMessage,
+                sizeof(queueMessage),
+                "Queue is empty or not created."
+            );
+        }
+    }
+
+    if (CheckCollisionPointRec(mouse, frontButton))
+    {
+        int value;
+        int success = 0;
+
+        if (queueType == 1 &&
+            linearQueueInitialized &&
+            linearQueue.size > 0)
+        {
+            value = linearQueue.items[linearQueue.front];
+            success = 1;
+        }
+        else if (queueType == 2 && queueInitialized)
+        {
+            success = queueFront(&circularQueue, &value);
+        }
+
+        if (success)
+        {
+            snprintf(
+                queueMessage,
+                sizeof(queueMessage),
+                "Front value: %d",
+                value
+            );
+        }
+        else
+        {
+            snprintf(
+                queueMessage,
+                sizeof(queueMessage),
+                "Queue is empty or not created."
+            );
+        }
+    }
 }
 
 // =========================================
-// PLACEHOLDER MODULE SCREENS
+// MORE MODULES MENU
 // =========================================
 
-void DrawModuleScreen(const char *title)
+static void DrawMoreModulesMenu(void)
+{
+    ClearBackground(RAYWHITE);
+
+    DrawText("MORE DATA STRUCTURES", 280, 60, 35, DARKBLUE);
+
+    DrawText(
+        "Select a module to explore:",
+        350, 125, 20, DARKGRAY
+    );
+
+    DrawButton(
+        (Rectangle){150, 190, 320, 80},
+        "SINGLY LINKED LIST"
+    );
+
+    DrawButton(
+        (Rectangle){530, 190, 320, 80},
+        "DOUBLY LINKED LIST"
+    );
+
+    DrawButton(
+        (Rectangle){150, 310, 700, 80},
+        "BRACKET BALANCE CHECKER"
+    );
+
+    DrawButton(
+        (Rectangle){400, 460, 200, 60},
+        "BACK"
+    );
+}
+
+static void HandleMoreModulesClicks(Vector2 mouse)
+{
+    Rectangle singlyButton = {150, 190, 320, 80};
+    Rectangle doublyButton = {530, 190, 320, 80};
+    Rectangle bracketButton = {150, 310, 700, 80};
+    Rectangle backButton = {400, 460, 200, 60};
+
+    if (CheckCollisionPointRec(mouse, singlyButton))
+    {
+        dataStructureMode = SINGLY_LIST_MODE;
+        listValueInput[0] = '\0';
+        listTargetInput[0] = '\0';
+    }
+    else if (CheckCollisionPointRec(mouse, doublyButton))
+    {
+        dataStructureMode = DOUBLY_LIST_MODE;
+        listValueInput[0] = '\0';
+        listTargetInput[0] = '\0';
+    }
+    else if (CheckCollisionPointRec(mouse, bracketButton))
+    {
+        dataStructureMode = BRACKET_CHECKER_MODE;
+        bracketInputActive = false;
+        bracketResultReady = false;
+        bracketScroll = 0;
+    }
+    else if (CheckCollisionPointRec(mouse, backButton))
+    {
+        dataStructureMode = STACK_MODE;
+    }
+}
+
+// =========================================
+// LINKED LIST LAB
+// =========================================
+
+static void DrawLinkedListLab(void)
+{
+    bool doubly = (dataStructureMode == DOUBLY_LIST_MODE);
+    int size = doubly ? doublyList.size : singlyList.size;
+    int displayCount = size < 10 ? size : 10;
+
+    ClearBackground(RAYWHITE);
+
+    DrawText(
+        doubly ? "DOUBLY LINKED LIST" : "SINGLY LINKED LIST",
+        300, 25, 32, DARKBLUE
+    );
+
+    DrawText("Value:", 40, 105, 18, DARKGRAY);
+
+    DrawRectangle(110, 100, 180, 40, WHITE);
+    DrawRectangleLines(110, 100, 180, 40, BLUE);
+    DrawText(listValueInput, 120, 110, 20, BLACK);
+
+    DrawText("Target:", 340, 105, 18, DARKGRAY);
+
+    DrawRectangle(420, 100, 180, 40, WHITE);
+    DrawRectangleLines(420, 100, 180, 40, BLUE);
+    DrawText(listTargetInput, 430, 110, 20, BLACK);
+
+    DrawButton((Rectangle){40, 170, 220, 45}, "INSERT BEGINNING");
+    DrawButton((Rectangle){280, 170, 220, 45}, "INSERT END");
+    DrawButton((Rectangle){520, 170, 220, 45}, "INSERT BEFORE");
+    DrawButton((Rectangle){760, 170, 220, 45}, "INSERT AFTER");
+
+    DrawButton((Rectangle){20, 230, 180, 45}, "DELETE BEGIN");
+    DrawButton((Rectangle){212, 230, 180, 45}, "DELETE END");
+    DrawButton((Rectangle){404, 230, 180, 45}, "DELETE VALUE");
+    DrawButton((Rectangle){596, 230, 180, 45}, "DELETE BEFORE");
+    DrawButton((Rectangle){788, 230, 180, 45}, "DELETE AFTER");
+
+    DrawButton((Rectangle){20, 290, 180, 45}, "SEARCH");
+
+    DrawText("LIST CONTENTS", 40, 355, 22, DARKBLUE);
+
+    DrawText(
+        TextFormat("Size: %d", size),
+        300, 355, 20, DARKGRAY
+    );
+
+    DrawText(listMessage, 500, 355, 16, DARKGREEN);
+    DrawText("FORWARD:", 40, 410, 17, DARKGRAY);
+
+    for (int i = 0; i < displayCount; i++)
+    {
+        int value = 0;
+
+        int valid = doubly
+            ? doublyGetForwardAt(&doublyList, i, &value)
+            : singlyGetAt(&singlyList, i, &value);
+
+        if (valid)
+        {
+            int x = 40 + i * 90;
+
+            DrawRectangle(x, 435, 70, 38, SKYBLUE);
+            DrawRectangleLines(x, 435, 70, 38, DARKBLUE);
+
+            DrawText(
+                TextFormat("%d", value),
+                x + 20, 444, 18, DARKBLUE
+            );
+
+            if (i < displayCount - 1)
+            {
+                DrawText(
+                    doubly ? "<->" : "->",
+                    x + 71, 444, 16, DARKBLUE
+                );
+            }
+        }
+    }
+
+    if (doubly)
+    {
+        DrawText("BACKWARD:", 40, 495, 17, DARKGRAY);
+
+        for (int i = 0; i < displayCount; i++)
+        {
+            int value = 0;
+
+            if (doublyGetBackwardAt(&doublyList, i, &value))
+            {
+                int x = 40 + i * 90;
+
+                DrawRectangle(x, 520, 70, 38, LIGHTGRAY);
+                DrawRectangleLines(x, 520, 70, 38, DARKBLUE);
+
+                DrawText(
+                    TextFormat("%d", value),
+                    x + 20, 529, 18, DARKBLUE
+                );
+
+                if (i < displayCount - 1)
+                    DrawText("<->", x + 71, 529, 16, DARKBLUE);
+            }
+        }
+    }
+
+    if (size > 10)
+    {
+        DrawText(
+            "Only the first 10 nodes are displayed.",
+            650, 495, 14, GRAY
+        );
+    }
+
+    DrawButton((Rectangle){400, 590, 200, 45}, "BACK");
+}
+
+static void HandleLinkedListClicks(Vector2 mouse)
+{
+    bool doubly = (dataStructureMode == DOUBLY_LIST_MODE);
+
+    Rectangle valueBox = {110, 100, 180, 40};
+    Rectangle targetBox = {420, 100, 180, 40};
+
+    Rectangle buttons[10] =
+    {
+        {40, 170, 220, 45},
+        {280, 170, 220, 45},
+        {520, 170, 220, 45},
+        {760, 170, 220, 45},
+        {20, 230, 180, 45},
+        {212, 230, 180, 45},
+        {404, 230, 180, 45},
+        {596, 230, 180, 45},
+        {788, 230, 180, 45},
+        {20, 290, 180, 45}
+    };
+
+    Rectangle backButton = {400, 590, 200, 45};
+
+    if (CheckCollisionPointRec(mouse, backButton))
+    {
+        dataStructureMode = MORE_MODULES_MENU;
+        listValueActive = false;
+        listTargetActive = false;
+        return;
+    }
+
+    if (CheckCollisionPointRec(mouse, valueBox))
+    {
+        listValueActive = true;
+        listTargetActive = false;
+        return;
+    }
+
+    if (CheckCollisionPointRec(mouse, targetBox))
+    {
+        listValueActive = false;
+        listTargetActive = true;
+        return;
+    }
+
+    listValueActive = false;
+    listTargetActive = false;
+
+    int action = -1;
+
+    for (int i = 0; i < 10; i++)
+    {
+        if (CheckCollisionPointRec(mouse, buttons[i]))
+        {
+            action = i;
+            break;
+        }
+    }
+
+    if (action < 0)
+        return;
+
+    int value = 0;
+    int target = 0;
+
+    int valueValid = ParseInteger(listValueInput, &value);
+    int targetValid = ParseInteger(listTargetInput, &target);
+
+    int needsValue =
+        action == 0 || action == 1 ||
+        action == 2 || action == 3 ||
+        action == 6 || action == 9;
+
+    int needsTarget =
+        action == 2 || action == 3 ||
+        action == 7 || action == 8;
+
+    if (needsValue && !valueValid)
+    {
+        snprintf(
+            listMessage,
+            sizeof(listMessage),
+            "Enter a valid value."
+        );
+        return;
+    }
+
+    if (needsTarget && !targetValid)
+    {
+        snprintf(
+            listMessage,
+            sizeof(listMessage),
+            "Enter a valid target value."
+        );
+        return;
+    }
+
+    int success = 0;
+    int removed = 0;
+    int searchIndex = -1;
+
+    if (!doubly)
+    {
+        switch (action)
+        {
+            case 0:
+                success = singlyInsertBeginning(&singlyList, value);
+                break;
+
+            case 1:
+                success = singlyInsertEnd(&singlyList, value);
+                break;
+
+            case 2:
+                success = singlyInsertBefore(&singlyList, target, value);
+                break;
+
+            case 3:
+                success = singlyInsertAfter(&singlyList, target, value);
+                break;
+
+            case 4:
+                success = singlyDeleteBeginning(&singlyList, &removed);
+                break;
+
+            case 5:
+                success = singlyDeleteEnd(&singlyList, &removed);
+                break;
+
+            case 6:
+                success = singlyDeleteValue(&singlyList, value);
+                break;
+
+            case 7:
+                success = singlyDeleteBefore(&singlyList, target, &removed);
+                break;
+
+            case 8:
+                success = singlyDeleteAfter(&singlyList, target, &removed);
+                break;
+
+            case 9:
+                searchIndex = singlySearch(&singlyList, value);
+                break;
+
+            default:
+                break;
+        }
+    }
+    else
+    {
+        switch (action)
+        {
+            case 0:
+                success = doublyInsertBeginning(&doublyList, value);
+                break;
+
+            case 1:
+                success = doublyInsertEnd(&doublyList, value);
+                break;
+
+            case 2:
+                success = doublyInsertBefore(&doublyList, target, value);
+                break;
+
+            case 3:
+                success = doublyInsertAfter(&doublyList, target, value);
+                break;
+
+            case 4:
+                success = doublyDeleteBeginning(&doublyList, &removed);
+                break;
+
+            case 5:
+                success = doublyDeleteEnd(&doublyList, &removed);
+                break;
+
+            case 6:
+                success = doublyDeleteValue(&doublyList, value);
+                break;
+
+            case 7:
+                success = doublyDeleteBefore(&doublyList, target, &removed);
+                break;
+
+            case 8:
+                success = doublyDeleteAfter(&doublyList, target, &removed);
+                break;
+
+            case 9:
+                searchIndex = doublySearch(&doublyList, value);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    if (action == 9)
+    {
+        if (searchIndex >= 0)
+        {
+            snprintf(
+                listMessage,
+                sizeof(listMessage),
+                "Value found at position %d.",
+                searchIndex
+            );
+        }
+        else
+        {
+            snprintf(
+                listMessage,
+                sizeof(listMessage),
+                "Value not found."
+            );
+        }
+    }
+    else if (success)
+    {
+        if (action >= 4 && action <= 8)
+        {
+            if (action == 6)
+            {
+                snprintf(
+                    listMessage,
+                    sizeof(listMessage),
+                    "Value deleted successfully."
+                );
+            }
+            else
+            {
+                snprintf(
+                    listMessage,
+                    sizeof(listMessage),
+                    "Deleted value: %d",
+                    removed
+                );
+            }
+        }
+        else
+        {
+            snprintf(
+                listMessage,
+                sizeof(listMessage),
+                "Value inserted successfully."
+            );
+
+            listValueInput[0] = '\0';
+        }
+    }
+    else
+    {
+        snprintf(
+            listMessage,
+            sizeof(listMessage),
+            "Operation failed. Check that the list and target exist."
+        );
+    }
+}
+
+// =========================================
+// BRACKET BALANCE CHECKER
+// =========================================
+
+static void DrawBracketCheckerLab(void)
+{
+    int visibleSteps = 8;
+
+    int maxScroll =
+        bracketResult.stepCount > visibleSteps
+        ? bracketResult.stepCount - visibleSteps : 0;
+
+    ClearBackground(RAYWHITE);
+
+    DrawText(
+        "BRACKET BALANCE CHECKER",
+        265, 35, 32, DARKBLUE
+    );
+
+    DrawText(
+        "Enter an expression containing (), [] or {}:",
+        120, 125, 20, DARKGRAY
+    );
+
+    DrawRectangle(120, 165, 760, 50, WHITE);
+    DrawRectangleLines(120, 165, 760, 50, BLUE);
+
+    DrawText(bracketExpression, 135, 178, 22, BLACK);
+
+    DrawButton((Rectangle){420, 235, 160, 50}, "CHECK");
+
+    if (bracketResultReady)
+    {
+        DrawText(
+            bracketResult.message,
+            120, 305, 22,
+            bracketResult.balanced ? DARKGREEN : RED
+        );
+
+        DrawText(
+            "STACK PROCESSING STEPS",
+            120, 345, 20, DARKBLUE
+        );
+
+        if (bracketResult.stepCount == 0)
+        {
+            DrawText(
+                "No brackets were found in the expression.",
+                120, 385, 17, DARKGRAY
+            );
+        }
+        else
+        {
+            int first = bracketScroll;
+            int last = first + visibleSteps;
+
+            if (last > bracketResult.stepCount)
+                last = bracketResult.stepCount;
+
+            DrawText(
+                TextFormat(
+                    "Showing steps %d-%d of %d (use mouse wheel to scroll)",
+                    first + 1,
+                    last,
+                    bracketResult.stepCount
+                ),
+                120, 368, 14, GRAY
+            );
+
+            for (int i = first; i < last; i++)
+            {
+                BracketStep *step = &bracketResult.steps[i];
+
+                DrawText(
+                    TextFormat(
+                        "%d. Bracket: %c | Stack: %s",
+                        i + 1,
+                        step->symbol,
+                        step->stackSize > 0
+                            ? step->stackSnapshot : "EMPTY"
+                    ),
+                    120,
+                    393 + (i - first) * 25,
+                    17,
+                    DARKGRAY
+                );
+            }
+        }
+
+        if (maxScroll > 0)
+        {
+            DrawText(
+                "Scroll over this screen to view the remaining steps.",
+                120, 600, 14, GRAY
+            );
+        }
+    }
+
+    DrawButton((Rectangle){400, 610, 200, 35}, "BACK");
+}
+
+static void HandleBracketCheckerClicks(Vector2 mouse)
+{
+    Rectangle inputBox = {120, 165, 760, 50};
+    Rectangle checkButton = {420, 235, 160, 50};
+    Rectangle backButton = {400, 610, 200, 35};
+
+    if (CheckCollisionPointRec(mouse, backButton))
+    {
+        dataStructureMode = MORE_MODULES_MENU;
+        bracketInputActive = false;
+        return;
+    }
+
+    if (CheckCollisionPointRec(mouse, inputBox))
+    {
+        bracketInputActive = true;
+        return;
+    }
+
+    bracketInputActive = false;
+
+    if (CheckCollisionPointRec(mouse, checkButton))
+    {
+        bracketCheck(bracketExpression, &bracketResult);
+        bracketResultReady = true;
+        bracketScroll = 0;
+    }
+}
+
+// =========================================
+// PLACEHOLDER SCREENS
+// =========================================
+
+static void DrawModuleScreen(const char *title)
 {
     ClearBackground(RAYWHITE);
 
@@ -816,39 +1739,124 @@ void DrawModuleScreen(const char *title)
 }
 
 // =========================================
-// INITIALISE HANOI
+// MOUSE CONTROL HELPERS
 // =========================================
 
-void InitialiseHanoi(void)
+static void HandleHanoiClicks(Vector2 mouse)
 {
-    hanoiMovesMade = 0;
-    hanoiCurrentMove = 0;
-    hanoiMoveCount = 0;
+    Rectangle startButton = {150, 530, 120, 45};
+    Rectangle pauseButton = {350, 530, 120, 45};
+    Rectangle stepButton = {550, 530, 120, 45};
+    Rectangle resetButton = {750, 530, 120, 45};
 
-    hanoiTotal = hanoiTotalMoves(hanoiDisks);
+    Rectangle slowButton = {150, 480, 120, 40};
+    Rectangle normalButton = {350, 480, 120, 40};
+    Rectangle fastButton = {550, 480, 120, 40};
 
-    generateHanoiMoves(
-        hanoiDisks,
-        0,
-        1,
-        2,
-        hanoiMoves,
-        &hanoiMoveCount
-    );
+    Rectangle minusButton = {420, 175, 70, 35};
+    Rectangle plusButton = {510, 175, 70, 35};
 
-    pegCounts[0] = 0;
-    pegCounts[1] = 0;
-    pegCounts[2] = 0;
+    Rectangle backButton = {400, 590, 200, 45};
 
-    for (int i = 0; i < hanoiDisks; i++)
+    if (CheckCollisionPointRec(mouse, minusButton) && hanoiDisks > 1)
     {
-        pegDisks[0][i] = hanoiDisks - i;
-        pegCounts[0]++;
+        hanoiDisks--;
+        InitialiseHanoi();
+    }
+    else if (CheckCollisionPointRec(mouse, plusButton) && hanoiDisks < 8)
+    {
+        hanoiDisks++;
+        InitialiseHanoi();
     }
 
-    hanoiRunning = false;
-    hanoiPaused = false;
-    hanoiMoveTimer = 0.0;
+    if (CheckCollisionPointRec(mouse, slowButton))
+        hanoiMoveSpeed = 1.5f;
+
+    if (CheckCollisionPointRec(mouse, normalButton))
+        hanoiMoveSpeed = 1.0f;
+
+    if (CheckCollisionPointRec(mouse, fastButton))
+        hanoiMoveSpeed = 0.3f;
+
+    if (CheckCollisionPointRec(mouse, startButton) &&
+        hanoiCurrentMove < hanoiMoveCount)
+    {
+        hanoiRunning = true;
+        hanoiPaused = false;
+    }
+
+    if (CheckCollisionPointRec(mouse, pauseButton))
+    {
+        hanoiPaused = true;
+        hanoiRunning = false;
+    }
+
+    if (CheckCollisionPointRec(mouse, stepButton) &&
+        hanoiCurrentMove < hanoiMoveCount)
+    {
+        HanoiMove move = hanoiMoves[hanoiCurrentMove++];
+
+        MoveHanoiDisk(move.from, move.to);
+
+        if (hanoiCurrentMove >= hanoiMoveCount)
+            hanoiRunning = false;
+    }
+
+    if (CheckCollisionPointRec(mouse, resetButton))
+        InitialiseHanoi();
+
+    if (CheckCollisionPointRec(mouse, backButton))
+    {
+        recursionMode = FIBONACCI;
+        ResetRecursionInput();
+    }
+}
+
+static void HandleRecursionClicks(Vector2 mouse)
+{
+    Rectangle inputBox = {150, 300, 250, 50};
+
+    Rectangle fibButton = {150, 155, 220, 65};
+    Rectangle factButton = {390, 155, 220, 65};
+    Rectangle hanoiButton = {630, 155, 220, 65};
+
+    Rectangle calculateButton = {150, 420, 250, 65};
+    Rectangle backButton = {150, 530, 180, 60};
+
+    inputActive = CheckCollisionPointRec(mouse, inputBox);
+
+    if (CheckCollisionPointRec(mouse, fibButton))
+    {
+        recursionMode = FIBONACCI;
+        ResetRecursionInput();
+    }
+    else if (CheckCollisionPointRec(mouse, factButton))
+    {
+        recursionMode = FACTORIAL;
+        ResetRecursionInput();
+    }
+    else if (CheckCollisionPointRec(mouse, hanoiButton))
+    {
+        recursionMode = TOWER_OF_HANOI;
+        hanoiDisks = 3;
+        InitialiseHanoi();
+        resultReady = false;
+        inputActive = false;
+    }
+
+    if (CheckCollisionPointRec(mouse, calculateButton))
+    {
+        if (recursionMode == FIBONACCI)
+            CalculateFibonacci();
+        else if (recursionMode == FACTORIAL)
+            CalculateFactorial();
+    }
+
+    if (CheckCollisionPointRec(mouse, backButton))
+    {
+        currentScreen = DASHBOARD;
+        ResetRecursionInput();
+    }
 }
 
 // =========================================
@@ -860,26 +1868,21 @@ int main(void)
     InitWindow(1000, 650, "Algorithm Explorer");
 
     if (!IsWindowReady())
-    {
         return 1;
-    }
 
     SetTargetFPS(60);
 
-    // =====================================
-    // MAIN APPLICATION LOOP
-    // =====================================
+    // Initialize linked lists before they are used.
+    singlyInit(&singlyList);
+    doublyInit(&doublyList);
+    InitialiseHanoi();
 
     while (!WindowShouldClose())
     {
-        // ---------------------------------
-        // AUTOMATIC TOWER OF HANOI MOVEMENT
-        // ---------------------------------
-
+        // Automatic Tower of Hanoi animation
         if (currentScreen == RECURSION_LAB &&
             recursionMode == TOWER_OF_HANOI &&
-            hanoiRunning &&
-            !hanoiPaused)
+            hanoiRunning && !hanoiPaused)
         {
             hanoiMoveTimer += GetFrameTime();
 
@@ -887,30 +1890,22 @@ int main(void)
             {
                 if (hanoiCurrentMove < hanoiMoveCount)
                 {
-                    HanoiMove move =
-                        hanoiMoves[hanoiCurrentMove];
+                    HanoiMove move = hanoiMoves[hanoiCurrentMove++];
 
                     MoveHanoiDisk(move.from, move.to);
-
-                    hanoiCurrentMove++;
                 }
 
                 hanoiMoveTimer = 0.0;
 
                 if (hanoiCurrentMove >= hanoiMoveCount)
-                {
                     hanoiRunning = false;
-                }
             }
         }
 
-        Vector2 mouse = GetMousePosition();
-
-        // =================================
+        // =====================================
         // KEYBOARD INPUT
-        // =================================
+        // =====================================
 
-        // Recursion input
         if (currentScreen == RECURSION_LAB &&
             recursionMode != TOWER_OF_HANOI &&
             inputActive)
@@ -919,15 +1914,12 @@ int main(void)
 
             while (key > 0)
             {
-                if (key >= '0' &&
-                    key <= '9' &&
-                    strlen(inputText) < 2)
-                {
-                    int length = (int)strlen(inputText);
+                size_t length = strlen(inputText);
 
+                if (key >= '0' && key <= '9' && length < 2)
+                {
                     inputText[length] = (char)key;
                     inputText[length + 1] = '\0';
-
                     resultReady = false;
                 }
 
@@ -936,7 +1928,7 @@ int main(void)
 
             if (IsKeyPressed(KEY_BACKSPACE))
             {
-                int length = (int)strlen(inputText);
+                size_t length = strlen(inputText);
 
                 if (length > 0)
                 {
@@ -946,56 +1938,56 @@ int main(void)
             }
         }
 
-        // Stack input
         if (currentScreen == DATA_STRUCTURES_LAB &&
-            dataStructureMode == 0 &&
+            dataStructureMode == STACK_MODE &&
             stackInputActive)
         {
-            int key = GetCharPressed();
+            HandleIntegerTyping(stackInput, sizeof(stackInput));
+        }
 
-            while (key > 0)
+        if (currentScreen == DATA_STRUCTURES_LAB &&
+            dataStructureMode == QUEUE_MODE &&
+            queueInputActive)
+        {
+            HandleIntegerTyping(queueInput, sizeof(queueInput));
+        }
+
+        if (currentScreen == DATA_STRUCTURES_LAB &&
+            (dataStructureMode == SINGLY_LIST_MODE ||
+             dataStructureMode == DOUBLY_LIST_MODE))
+        {
+            if (listValueActive)
             {
-                if (((key >= '0' && key <= '9') ||
-                     (key == '-' && strlen(stackInput) == 0)) &&
-                    strlen(stackInput) < 14)
-                {
-                    int length = (int)strlen(stackInput);
-
-                    stackInput[length] = (char)key;
-                    stackInput[length + 1] = '\0';
-                }
-
-                key = GetCharPressed();
+                HandleIntegerTyping(
+                    listValueInput,
+                    sizeof(listValueInput)
+                );
             }
-
-            if (IsKeyPressed(KEY_BACKSPACE))
+            else if (listTargetActive)
             {
-                int length = (int)strlen(stackInput);
-
-                if (length > 0)
-                {
-                    stackInput[length - 1] = '\0';
-                }
+                HandleIntegerTyping(
+                    listTargetInput,
+                    sizeof(listTargetInput)
+                );
             }
         }
 
-        // Queue input
         if (currentScreen == DATA_STRUCTURES_LAB &&
-            dataStructureMode == 1 &&
-            queueInputActive)
+            dataStructureMode == BRACKET_CHECKER_MODE &&
+            bracketInputActive)
         {
             int key = GetCharPressed();
 
             while (key > 0)
             {
-                if (((key >= '0' && key <= '9') ||
-                     (key == '-' && strlen(queueInput) == 0)) &&
-                    strlen(queueInput) < 14)
-                {
-                    int length = (int)strlen(queueInput);
+                size_t length = strlen(bracketExpression);
 
-                    queueInput[length] = (char)key;
-                    queueInput[length + 1] = '\0';
+                if (key >= 32 && key <= 126 &&
+                    length + 1 < sizeof(bracketExpression))
+                {
+                    bracketExpression[length] = (char)key;
+                    bracketExpression[length + 1] = '\0';
+                    bracketResultReady = false;
                 }
 
                 key = GetCharPressed();
@@ -1003,28 +1995,47 @@ int main(void)
 
             if (IsKeyPressed(KEY_BACKSPACE))
             {
-                int length = (int)strlen(queueInput);
+                size_t length = strlen(bracketExpression);
 
                 if (length > 0)
                 {
-                    queueInput[length - 1] = '\0';
+                    bracketExpression[length - 1] = '\0';
+                    bracketResultReady = false;
                 }
             }
         }
 
-        // =================================
-        // HANDLE MOUSE CLICKS
-        // =================================
+        // Scroll through bracket-processing steps
+        if (currentScreen == DATA_STRUCTURES_LAB &&
+            dataStructureMode == BRACKET_CHECKER_MODE &&
+            bracketResultReady)
+        {
+            int wheel = (int)GetMouseWheelMove();
+
+            int maxScroll =
+                bracketResult.stepCount > 8
+                ? bracketResult.stepCount - 8 : 0;
+
+            bracketScroll -= wheel;
+
+            if (bracketScroll < 0)
+                bracketScroll = 0;
+
+            if (bracketScroll > maxScroll)
+                bracketScroll = maxScroll;
+        }
+
+        // =====================================
+        // MOUSE CLICKS
+        // =====================================
 
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         {
-            // ---------------------------------
-            // DASHBOARD CONTROLS
-            // ---------------------------------
+            Vector2 mouse = GetMousePosition();
 
             if (currentScreen == DASHBOARD)
             {
-                Rectangle buttons[4] =
+                Rectangle dashboardButtons[4] =
                 {
                     {150, 260, 320, 85},
                     {530, 260, 320, 85},
@@ -1034,658 +2045,53 @@ int main(void)
 
                 for (int i = 0; i < 4; i++)
                 {
-                    if (CheckCollisionPointRec(mouse, buttons[i]))
+                    if (CheckCollisionPointRec(mouse, dashboardButtons[i]))
                     {
                         currentScreen = (Screen)(i + 1);
 
                         ResetRecursionInput();
+                        ResetDataStructureInputFocus();
 
-                        stackInputActive = false;
-                        queueInputActive = false;
+                        if (currentScreen == DATA_STRUCTURES_LAB)
+                            dataStructureMode = STACK_MODE;
+
+                        break;
                     }
                 }
             }
-
-            // ---------------------------------
-            // TOWER OF HANOI CONTROLS
-            // ---------------------------------
-
-            else if (currentScreen == RECURSION_LAB &&
-                     recursionMode == TOWER_OF_HANOI)
-            {
-                Rectangle startButton = {150, 530, 120, 45};
-                Rectangle pauseButton = {350, 530, 120, 45};
-                Rectangle stepButton = {550, 530, 120, 45};
-                Rectangle resetButton = {750, 530, 120, 45};
-
-                Rectangle slowButton = {150, 480, 120, 40};
-                Rectangle normalButton = {350, 480, 120, 40};
-                Rectangle fastButton = {550, 480, 120, 40};
-
-                Rectangle minusButton = {420, 175, 70, 35};
-                Rectangle plusButton = {510, 175, 70, 35};
-
-                Rectangle backButton = {400, 590, 200, 45};
-
-                // Change disk count
-                if (CheckCollisionPointRec(mouse, minusButton) ||
-                    CheckCollisionPointRec(mouse, plusButton))
-                {
-                    if (CheckCollisionPointRec(mouse, minusButton) &&
-                        hanoiDisks > 1)
-                    {
-                        hanoiDisks--;
-                    }
-                    else if (CheckCollisionPointRec(mouse, plusButton) &&
-                             hanoiDisks < 8)
-                    {
-                        hanoiDisks++;
-                    }
-
-                    InitialiseHanoi();
-                }
-
-                // Speed controls
-                if (CheckCollisionPointRec(mouse, slowButton))
-                {
-                    hanoiMoveSpeed = 1.5f;
-                }
-
-                if (CheckCollisionPointRec(mouse, normalButton))
-                {
-                    hanoiMoveSpeed = 1.0f;
-                }
-
-                if (CheckCollisionPointRec(mouse, fastButton))
-                {
-                    hanoiMoveSpeed = 0.3f;
-                }
-
-                // Start
-                if (CheckCollisionPointRec(mouse, startButton))
-                {
-                    if (hanoiCurrentMove < hanoiMoveCount)
-                    {
-                        hanoiRunning = true;
-                        hanoiPaused = false;
-                    }
-                }
-
-                // Pause
-                if (CheckCollisionPointRec(mouse, pauseButton))
-                {
-                    hanoiPaused = true;
-                    hanoiRunning = false;
-                }
-
-                // Step
-                if (CheckCollisionPointRec(mouse, stepButton))
-                {
-                    if (hanoiCurrentMove < hanoiMoveCount)
-                    {
-                        HanoiMove move =
-                            hanoiMoves[hanoiCurrentMove];
-
-                        MoveHanoiDisk(move.from, move.to);
-
-                        hanoiCurrentMove++;
-                    }
-                }
-
-                // Reset
-                if (CheckCollisionPointRec(mouse, resetButton))
-                {
-                    InitialiseHanoi();
-                }
-
-                // Back
-                if (CheckCollisionPointRec(mouse, backButton))
-                {
-                    currentScreen = RECURSION_LAB;
-                    recursionMode = FIBONACCI;
-                    ResetRecursionInput();
-                }
-            }
-
-            // ---------------------------------
-            // RECURSION LAB CONTROLS
-            // ---------------------------------
-
             else if (currentScreen == RECURSION_LAB)
             {
-                Rectangle inputBox = {150, 300, 250, 50};
-
-                Rectangle fibButton = {150, 155, 220, 65};
-                Rectangle factButton = {390, 155, 220, 65};
-                Rectangle hanoiButton = {630, 155, 220, 65};
-
-                Rectangle calculateButton = {150, 420, 250, 65};
-                Rectangle backButton = {150, 530, 180, 60};
-
-                inputActive =
-                    CheckCollisionPointRec(mouse, inputBox);
-
-                if (CheckCollisionPointRec(mouse, fibButton))
-                {
-                    recursionMode = FIBONACCI;
-                    ResetRecursionInput();
-                }
-
-                if (CheckCollisionPointRec(mouse, factButton))
-                {
-                    recursionMode = FACTORIAL;
-                    ResetRecursionInput();
-                }
-
-                if (CheckCollisionPointRec(mouse, hanoiButton))
-                {
-                    recursionMode = TOWER_OF_HANOI;
-
-                    hanoiDisks = 3;
-
-                    InitialiseHanoi();
-
-                    resultReady = false;
-                    inputActive = false;
-                }
-
-                if (CheckCollisionPointRec(mouse, calculateButton))
-                {
-                    if (recursionMode == FIBONACCI)
-                    {
-                        CalculateFibonacci();
-                    }
-                    else if (recursionMode == FACTORIAL)
-                    {
-                        CalculateFactorial();
-                    }
-                }
-
-                if (CheckCollisionPointRec(mouse, backButton))
-                {
-                    currentScreen = DASHBOARD;
-                    ResetRecursionInput();
-                }
+                if (recursionMode == TOWER_OF_HANOI)
+                    HandleHanoiClicks(mouse);
+                else
+                    HandleRecursionClicks(mouse);
             }
-
-            // ---------------------------------
-            // DATA STRUCTURES LAB CONTROLS
-            // ---------------------------------
-
             else if (currentScreen == DATA_STRUCTURES_LAB)
             {
-                // =================================
-                // STACK CONTROLS
-                // =================================
-
-                if (dataStructureMode == 0)
-                {
-                    Rectangle queueLabButton = {700, 30, 180, 45};
-
-                    Rectangle minusButton = {330, 145, 50, 40};
-                    Rectangle plusButton = {390, 145, 50, 40};
-
-                    Rectangle createButton = {470, 140, 180, 50};
-
-                    Rectangle inputBox = {100, 265, 200, 45};
-
-                    Rectangle pushButton = {330, 260, 130, 50};
-                    Rectangle popButton = {480, 260, 130, 50};
-                    Rectangle peekButton = {630, 260, 130, 50};
-
-                    Rectangle backButton = {400, 550, 200, 55};
-
-                    // Open Queue Lab
-                    if (CheckCollisionPointRec(mouse, queueLabButton))
-                    {
-                        dataStructureMode = 1;
-                        stackInputActive = false;
-                    }
-                    else
-                    {
-                        stackInputActive =
-                            CheckCollisionPointRec(mouse, inputBox);
-                    }
-
-                    // Capacity minus
-                    if (CheckCollisionPointRec(mouse, minusButton) &&
-                        stackCapacityInput > 1)
-                    {
-                        stackCapacityInput--;
-                    }
-
-                    // Capacity plus
-                    if (CheckCollisionPointRec(mouse, plusButton) &&
-                        stackCapacityInput < 20)
-                    {
-                        stackCapacityInput++;
-                    }
-
-                    // Create stack
-                    if (CheckCollisionPointRec(mouse, createButton))
-                    {
-                        if (stackInitialized)
-                        {
-                            stackFree(&userStack);
-                            stackInitialized = false;
-                        }
-
-                        if (stackInit(&userStack, stackCapacityInput))
-                        {
-                            stackInitialized = true;
-
-                            strcpy(
-                                stackMessage,
-                                "Stack created successfully!"
-                            );
-                        }
-                        else
-                        {
-                            strcpy(
-                                stackMessage,
-                                "Unable to create stack."
-                            );
-                        }
-                    }
-
-                    // PUSH
-                    if (CheckCollisionPointRec(mouse, pushButton))
-                    {
-                        char *end;
-                        long value = strtol(stackInput, &end, 10);
-
-                        if (!stackInitialized)
-                        {
-                            strcpy(stackMessage, "Create a stack first.");
-                        }
-                        else if (stackInput[0] == '\0' ||
-                                 *end != '\0' ||
-                                 value < INT_MIN ||
-                                 value > INT_MAX)
-                        {
-                            strcpy(stackMessage, "Enter a valid integer.");
-                        }
-                        else if (stackPush(&userStack, (int)value))
-                        {
-                            strcpy(
-                                stackMessage,
-                                "Value pushed successfully!"
-                            );
-
-                            stackInput[0] = '\0';
-                        }
-                        else
-                        {
-                            strcpy(
-                                stackMessage,
-                                "Stack overflow! Stack is full."
-                            );
-                        }
-                    }
-
-                    // POP
-                    if (CheckCollisionPointRec(mouse, popButton))
-                    {
-                        int value;
-
-                        if (!stackInitialized)
-                        {
-                            strcpy(stackMessage, "Create a stack first.");
-                        }
-                        else if (stackPop(&userStack, &value))
-                        {
-                            snprintf(
-                                stackMessage,
-                                sizeof(stackMessage),
-                                "Popped value: %d",
-                                value
-                            );
-                        }
-                        else
-                        {
-                            strcpy(
-                                stackMessage,
-                                "Stack underflow! Stack is empty."
-                            );
-                        }
-                    }
-
-                    // PEEK
-                    if (CheckCollisionPointRec(mouse, peekButton))
-                    {
-                        int value;
-
-                        if (!stackInitialized)
-                        {
-                            strcpy(stackMessage, "Create a stack first.");
-                        }
-                        else if (stackPeek(&userStack, &value))
-                        {
-                            snprintf(
-                                stackMessage,
-                                sizeof(stackMessage),
-                                "Top value: %d",
-                                value
-                            );
-                        }
-                        else
-                        {
-                            strcpy(stackMessage, "Stack is empty.");
-                        }
-                    }
-
-                    // Back to dashboard
-                    if (CheckCollisionPointRec(mouse, backButton))
-                    {
-                        currentScreen = DASHBOARD;
-                        stackInputActive = false;
-                    }
-                }
-
-                // =================================
-                // QUEUE CONTROLS
-                // =================================
-
-                else
-                {
-                    Rectangle linearButton = {100, 150, 200, 50};
-                    Rectangle circularButton = {330, 150, 200, 50};
-
-                    Rectangle minusButton = {330, 215, 50, 40};
-                    Rectangle plusButton = {390, 215, 50, 40};
-
-                    Rectangle createButton = {470, 210, 180, 50};
-
-                    Rectangle inputBox = {100, 320, 200, 45};
-
-                    Rectangle enqueueButton = {330, 315, 150, 50};
-                    Rectangle dequeueButton = {500, 315, 150, 50};
-                    Rectangle frontButton = {670, 315, 130, 50};
-
-                    Rectangle backButton = {700, 30, 180, 45};
-
-                    // Back to Stack Lab
-                    if (CheckCollisionPointRec(mouse, backButton))
-                    {
-                        dataStructureMode = 0;
-                        queueInputActive = false;
-                    }
-                    else
-                    {
-                        queueInputActive =
-                            CheckCollisionPointRec(mouse, inputBox);
-                    }
-
-                    // Select linear queue
-                    if (CheckCollisionPointRec(mouse, linearButton))
-                    {
-                        queueType = 1;
-                    }
-
-                    // Select circular queue
-                    if (CheckCollisionPointRec(mouse, circularButton))
-                    {
-                        queueType = 2;
-                    }
-
-                    // Capacity minus
-                    if (CheckCollisionPointRec(mouse, minusButton) &&
-                        queueCapacityInput > 1)
-                    {
-                        queueCapacityInput--;
-                    }
-
-                    // Capacity plus
-                    if (CheckCollisionPointRec(mouse, plusButton) &&
-                        queueCapacityInput < 8)
-                    {
-                        queueCapacityInput++;
-                    }
-
-                    // Create queue
-                    if (CheckCollisionPointRec(mouse, createButton))
-                    {
-                        if (queueInitialized)
-                        {
-                            queueFree(&circularQueue);
-                            queueInitialized = false;
-                        }
-
-                        if (linearQueueInitialized)
-                        {
-                            linearQueueFree(&linearQueue);
-                            linearQueueInitialized = false;
-                        }
-
-                        if (queueType == 1)
-                        {
-                            if (linearQueueInit(
-                                &linearQueue,
-                                queueCapacityInput
-                            ))
-                            {
-                                linearQueueInitialized = true;
-
-                                strcpy(
-                                    queueMessage,
-                                    "Linear queue created!"
-                                );
-                            }
-                            else
-                            {
-                                strcpy(
-                                    queueMessage,
-                                    "Queue creation failed."
-                                );
-                            }
-                        }
-                        else if (queueType == 2)
-                        {
-                            if (queueInit(
-                                &circularQueue,
-                                queueCapacityInput
-                            ))
-                            {
-                                queueInitialized = true;
-
-                                strcpy(
-                                    queueMessage,
-                                    "Circular queue created!"
-                                );
-                            }
-                            else
-                            {
-                                strcpy(
-                                    queueMessage,
-                                    "Queue creation failed."
-                                );
-                            }
-                        }
-                        else
-                        {
-                            strcpy(
-                                queueMessage,
-                                "Select a queue type first."
-                            );
-                        }
-
-                        queueInput[0] = '\0';
-                    }
-
-                    // ENQUEUE
-                    if (CheckCollisionPointRec(mouse, enqueueButton))
-                    {
-                        char *end;
-                        long value = strtol(queueInput, &end, 10);
-
-                        if (queueInput[0] == '\0' ||
-                            *end != '\0' ||
-                            value < INT_MIN ||
-                            value > INT_MAX)
-                        {
-                            strcpy(
-                                queueMessage,
-                                "Enter a valid integer."
-                            );
-                        }
-                        else if (queueType == 1 &&
-                                 linearQueueInitialized)
-                        {
-                            if (linearEnqueue(
-                                &linearQueue,
-                                (int)value
-                            ))
-                            {
-                                strcpy(
-                                    queueMessage,
-                                    "Value enqueued!"
-                                );
-
-                                queueInput[0] = '\0';
-                            }
-                            else
-                            {
-                                strcpy(
-                                    queueMessage,
-                                    "Linear queue is full!"
-                                );
-                            }
-                        }
-                        else if (queueType == 2 &&
-                                 queueInitialized)
-                        {
-                            if (enqueue(
-                                &circularQueue,
-                                (int)value
-                            ))
-                            {
-                                strcpy(
-                                    queueMessage,
-                                    "Value enqueued!"
-                                );
-
-                                queueInput[0] = '\0';
-                            }
-                            else
-                            {
-                                strcpy(
-                                    queueMessage,
-                                    "Circular queue is full!"
-                                );
-                            }
-                        }
-                        else
-                        {
-                            strcpy(
-                                queueMessage,
-                                "Create a queue first."
-                            );
-                        }
-                    }
-
-                    // DEQUEUE
-                    if (CheckCollisionPointRec(mouse, dequeueButton))
-                    {
-                        int value;
-                        int success = 0;
-
-                        if (queueType == 1 &&
-                            linearQueueInitialized)
-                        {
-                            success = linearDequeue(
-                                &linearQueue,
-                                &value
-                            );
-                        }
-                        else if (queueType == 2 &&
-                                 queueInitialized)
-                        {
-                            success = dequeue(
-                                &circularQueue,
-                                &value
-                            );
-                        }
-
-                        if (success)
-                        {
-                            snprintf(
-                                queueMessage,
-                                sizeof(queueMessage),
-                                "Dequeued: %d",
-                                value
-                            );
-                        }
-                        else
-                        {
-                            strcpy(
-                                queueMessage,
-                                "Queue is empty or not created."
-                            );
-                        }
-                    }
-
-                    // FRONT
-                    if (CheckCollisionPointRec(mouse, frontButton))
-                    {
-                        int value;
-                        int success = 0;
-
-                        if (queueType == 1 &&
-                            linearQueueInitialized &&
-                            linearQueue.size > 0)
-                        {
-                            value =
-                                linearQueue.items[linearQueue.front];
-
-                            success = 1;
-                        }
-                        else if (queueType == 2 &&
-                                 queueInitialized)
-                        {
-                            success = queueFront(
-                                &circularQueue,
-                                &value
-                            );
-                        }
-
-                        if (success)
-                        {
-                            snprintf(
-                                queueMessage,
-                                sizeof(queueMessage),
-                                "Front value: %d",
-                                value
-                            );
-                        }
-                        else
-                        {
-                            strcpy(
-                                queueMessage,
-                                "Queue is empty or not created."
-                            );
-                        }
-                    }
-                }
+                if (dataStructureMode == STACK_MODE)
+                    HandleStackClicks(mouse);
+                else if (dataStructureMode == QUEUE_MODE)
+                    HandleQueueClicks(mouse);
+                else if (dataStructureMode == MORE_MODULES_MENU)
+                    HandleMoreModulesClicks(mouse);
+                else if (dataStructureMode == SINGLY_LIST_MODE ||
+                         dataStructureMode == DOUBLY_LIST_MODE)
+                    HandleLinkedListClicks(mouse);
+                else if (dataStructureMode == BRACKET_CHECKER_MODE)
+                    HandleBracketCheckerClicks(mouse);
             }
-
-            // ---------------------------------
-            // OTHER MODULE BACK BUTTONS
-            // ---------------------------------
-
             else
             {
                 Rectangle backButton = {400, 450, 200, 65};
 
                 if (CheckCollisionPointRec(mouse, backButton))
-                {
                     currentScreen = DASHBOARD;
-                }
             }
         }
 
-        // =================================
+        // =====================================
         // DRAW CURRENT SCREEN
-        // =================================
+        // =====================================
 
         BeginDrawing();
 
@@ -1696,24 +2102,23 @@ int main(void)
         else if (currentScreen == RECURSION_LAB)
         {
             if (recursionMode == TOWER_OF_HANOI)
-            {
                 DrawHanoiScreen();
-            }
             else
-            {
                 DrawRecursionLab();
-            }
         }
         else if (currentScreen == DATA_STRUCTURES_LAB)
         {
-            if (dataStructureMode == 0)
-            {
+            if (dataStructureMode == STACK_MODE)
                 DrawStackLab();
-            }
-            else
-            {
+            else if (dataStructureMode == QUEUE_MODE)
                 DrawQueueLab();
-            }
+            else if (dataStructureMode == MORE_MODULES_MENU)
+                DrawMoreModulesMenu();
+            else if (dataStructureMode == SINGLY_LIST_MODE ||
+                     dataStructureMode == DOUBLY_LIST_MODE)
+                DrawLinkedListLab();
+            else if (dataStructureMode == BRACKET_CHECKER_MODE)
+                DrawBracketCheckerLab();
         }
         else if (currentScreen == SORTING_LAB)
         {
@@ -1725,27 +2130,23 @@ int main(void)
         }
 
         EndDrawing();
+    }
 
-    } // End of main while loop
-
-    // =================================
+    // =====================================
     // FREE MEMORY
-    // =================================
+    // =====================================
 
     if (stackInitialized)
-    {
         stackFree(&userStack);
-    }
 
     if (queueInitialized)
-    {
         queueFree(&circularQueue);
-    }
 
     if (linearQueueInitialized)
-    {
         linearQueueFree(&linearQueue);
-    }
+
+    singlyClear(&singlyList);
+    doublyClear(&doublyList);
 
     CloseWindow();
 
